@@ -5,8 +5,6 @@ import {
   SearchOutlined,
   DeleteOutlined,
   EditOutlined,
-  PlusOutlined,
-  ExportOutlined,
 } from '@ant-design/icons'
 import { ColumnSearchDropdown } from '../ColumnSearchDropdown'
 
