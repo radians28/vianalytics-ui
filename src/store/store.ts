@@ -2,8 +2,12 @@ import { create } from "zustand";
 import { UserClientApi } from "./user-client";
 import { UploadClientApi } from "./upload-client";
 
-const userClient = new UserClientApi('http://localhost:3000/api');
-const uploadClient = new UploadClientApi('http://localhost:3000/api');
+// Built images set VITE_API_BASE_URL=/api (nginx proxies it to the svc);
+// local `pnpm dev` falls back to the svc running on port 3000.
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api';
+
+const userClient = new UserClientApi(apiBaseUrl);
+const uploadClient = new UploadClientApi(apiBaseUrl);
 
 export interface UserStore {
     login: (userEmail: string, userPass: string) => Promise<any | null>;
@@ -29,7 +33,7 @@ export interface UserStore {
 
     getProgressUpload: (token: string, payload: any) => Promise<void>;
 
-    setJobs: (jobs: any[]) => void;
+    setJobs: (jobs: any[] | ((prev: any[]) => any[])) => void;
 
     members: any[];
     totalMembers: number;
@@ -113,8 +117,10 @@ const useStore = create<UserStore>((set, get) => ({
         set({ jobs: data, totalJobs: total });
     },
 
+    // Accepts an array or a React-style updater, e.g. setJobs(prev => [...])
     setJobs(jobs) {
-        set({ jobs, totalJobs: jobs.length })
+        const next = typeof jobs === 'function' ? jobs(get().jobs) : jobs;
+        set({ jobs: next, totalJobs: next.length })
     },
 }));
 
