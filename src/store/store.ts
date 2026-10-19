@@ -32,6 +32,7 @@ export interface UserStore {
     deleteUser: (token: string, userId: string) => Promise<void>;
 
     getProgressUpload: (token: string, payload: any) => Promise<void>;
+    uploadFile: (token: string, file: File, metadata: { channel: string }) => Promise<Record<string, unknown>>;
 
     setJobs: (jobs: any[] | ((prev: any[]) => any[])) => void;
 
@@ -115,6 +116,12 @@ const useStore = create<UserStore>((set, get) => ({
     async getProgressUpload(token, payload) {
         const { data, meta: { total }} = await uploadClient.getUploadProgress(token, payload);
         set({ jobs: data, totalJobs: total });
+    },
+
+    // Does not swallow errors — the upload view reports each failed file
+    async uploadFile(token, file, metadata) {
+        const { data } = await uploadClient.uploadFile(token, file, metadata);
+        return data;
     },
 
     // Accepts an array or a React-style updater, e.g. setJobs(prev => [...])
