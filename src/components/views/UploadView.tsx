@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Table, Button, ConfigProvider } from 'antd'
+import { Table, Button, ConfigProvider, message } from 'antd'
 import type { TableColumnType, TableProps } from 'antd'
 import {
   RightOutlined,
@@ -9,12 +9,14 @@ import {
   ClockCircleOutlined,
   LoadingOutlined,
   SearchOutlined,
+  CloseCircleOutlined,
 } from '@ant-design/icons'
 import { SkuSanitizeModal } from '../SkuSanitizeModal'
 import { ColumnSearchDropdown } from '../ColumnSearchDropdown'
 import useStore from '../../store/store'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
 import type { FilterValue, SorterResult } from 'antd/es/table/interface'
+import { extractErrorMessage } from '../../utils/api'
 
 export type MarketplaceType =
   | 'Shopee'
@@ -31,6 +33,21 @@ export type ProcessingStatus =
   | 'Completed'
   | 'Failed'
 
+// Channel the svc processes each marketplace's export as. TikTok Shop and
+// Tokopedia come in one merged export
+const MARKETPLACE_CHANNELS: Record<MarketplaceType, string> = {
+  Shopee: 'shopee',
+  Tokopedia: 'tiktok_tokped',
+  'TikTok Shop': 'tiktok_tokped',
+  Lazada: 'lazada',
+  Blibli: 'blibli',
+}
+
+const ALLOWED_EXTENSIONS = ['xlsx', 'xls', 'csv']
+
+// How often the pipeline table refreshes while jobs are queued or processing
+const POLL_INTERVAL_MS = 10_000
+
 export interface PipelineJob {
   id: string
   fifoOrder?: number
@@ -44,7 +61,7 @@ export interface PipelineJob {
 }
 
 export const UploadView: React.FC = () => {
-  const { getProgressUpload, jobs, totalJobs, setJobs } = useStore();
+  const { getProgressUpload, uploadFile, jobs, totalJobs, setJobs } = useStore();
   const [authToken] = useLocalStorage('access_token');
   const navigate = useNavigate()
   const [page, setPage] = useState(1);
@@ -54,25 +71,10 @@ export const UploadView: React.FC = () => {
   const [selectedMarketplace, setSelectedMarketplace] =
     useState<MarketplaceType>('Shopee')
   const [isDragging, setIsDragging] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
   const [selectedPausedJob, setSelectedPausedJob] = useState<PipelineJob | null>(
     null
   )
-  // Shared FIFO priority used both for the default sort and the Status column sorter
-  const statusPriority = (status: ProcessingStatus) => {
-    switch (status) {
-      case 'Processing':
-        return 1
-      case 'Paused':
-        return 2
-      case 'Queued':
-        return 3
-      case 'Completed':
-        return 4
-      case 'Failed':
-        return 5
-    }
-  }
-
   // Per-column search dropdown for the Job File column
   const fileColumnSearchProps: TableColumnType<PipelineJob> = {
     filterDropdown: (props) => (
@@ -107,7 +109,7 @@ export const UploadView: React.FC = () => {
     e.preventDefault()
     setIsDragging(false)
     const files = Array.from(e.dataTransfer.files)
-    if (files.length > 0) {
+    if (files.length > 0 && !isUploading) {
       queueFiles(files)
     }
   }
@@ -116,24 +118,39 @@ export const UploadView: React.FC = () => {
     if (e.target.files && e.target.files.length > 0) {
       queueFiles(Array.from(e.target.files))
     }
+    // Clear so selecting the same file again still fires onChange
+    e.target.value = ''
   }
 
-  const queueFiles = (files: File[]) => {
-    const nextOrder =
-      jobs.filter((j) => j.status === 'Queued' || j.status === 'Processing').length + 1
+  const queueFiles = async (files: File[]) => {
+    const channel = MARKETPLACE_CHANNELS[selectedMarketplace]
+    const accepted = files.filter((file) => {
+      const extension = file.name.split('.').pop()?.toLowerCase() ?? ''
+      if (!ALLOWED_EXTENSIONS.includes(extension)) {
+        message.error(`${file.name}: unsupported file type (.xlsx, .xls, .csv only)`)
+        return false
+      }
+      return true
+    })
+    if (accepted.length === 0) return
 
-    const newJobs: PipelineJob[] = files.map((file, idx) => ({
-      id: `job-${Date.now()}-${idx}`,
-      fifoOrder: nextOrder + idx,
-      fileName: file.name,
-      marketplace: selectedMarketplace,
-      size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
-      recordsSummary: 'Waiting in FIFO queue for processing',
-      status: 'Queued',
-      timestamp: 'Just now',
-    }))
+    setIsUploading(true)
+    let queued = 0
+    // One at a time so the files enter the FIFO queue in the order selected
+    for (const file of accepted) {
+      try {
+        await uploadFile(authToken.access_token, file, { channel })
+        queued += 1
+      } catch (err) {
+        message.error(`${file.name}: ${extractErrorMessage(err, 'Upload failed.')}`)
+      }
+    }
+    setIsUploading(false)
 
-    setJobs((prev) => [...newJobs, ...prev])
+    if (queued > 0) {
+      message.success(`${queued} file${queued > 1 ? 's' : ''} queued for processing.`)
+    }
+    fetchProgress()
   }
 
   const handleResumeJob = (jobId: string) => {
@@ -150,10 +167,6 @@ export const UploadView: React.FC = () => {
       )
     )
   }
-
-  const sortedJobs = [...jobs].sort(
-    (a, b) => statusPriority(a.status) - statusPriority(b.status)
-  )
 
   // Ant Design Table Columns for Data Processing Pipeline
   const columns: TableProps<PipelineJob>['columns'] = [
@@ -216,14 +229,19 @@ export const UploadView: React.FC = () => {
       width: 340,
       render: (_, record) => (
         <div className="job-records-cell">
-          <span className="job-size">{record.size}</span> •{' '}
-          <span
-            className={
-              record.status === 'Paused' ? 'font-semibold text-danger' : ''
-            }
-          >
-            {record.recordsSummary}
-          </span>
+          <span className="job-size">{record.size}</span>
+          {record.recordsSummary && (
+            <>
+              {' • '}
+              <span
+                className={
+                  record.status === 'Paused' ? 'font-semibold text-danger' : ''
+                }
+              >
+                {record.recordsSummary}
+              </span>
+            </>
+          )}
         </div>
       ),
     },
@@ -279,6 +297,14 @@ export const UploadView: React.FC = () => {
             </span>
           )
         }
+        if (status === 'Failed') {
+          return (
+            <span className="status-tag status-failed">
+              <CloseCircleOutlined style={{ fontSize: 13 }} />
+              Failed
+            </span>
+          )
+        }
         return (
           <span className="status-tag status-completed">
             <CheckCircleOutlined style={{ fontSize: 13, color: '#059669' }} />
@@ -321,6 +347,13 @@ export const UploadView: React.FC = () => {
         if (record.status === 'Processing') {
           return <span className="subtle-status">Auto-ingesting...</span>
         }
+        if (record.status === 'Failed') {
+          return (
+            <span className="subtle-status" title={record.statusDetail}>
+              Processing failed
+            </span>
+          )
+        }
         return <span className="subtle-status">Waiting in queue</span>
       },
     },
@@ -348,6 +381,15 @@ export const UploadView: React.FC = () => {
     fetchProgress();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize, filters, sorter, authToken.access_token, getProgressUpload]);
+
+  // Keep statuses fresh while Airflow works through the queue
+  const hasActiveJobs = jobs.some((j) => j.status === 'Queued' || j.status === 'Processing')
+  useEffect(() => {
+    if (!hasActiveJobs) return
+    const timer = window.setInterval(fetchProgress, POLL_INTERVAL_MS)
+    return () => window.clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasActiveJobs, page, pageSize, filters, sorter, authToken.access_token]);
 
   return (
     <ConfigProvider
@@ -407,7 +449,8 @@ export const UploadView: React.FC = () => {
             id="file-upload-input"
             className="file-input-hidden"
             multiple
-            accept=".xlsx,.xls"
+            accept=".xlsx,.xls,.csv"
+            disabled={isUploading}
             onChange={handleFileInput}
           />
           <div className="dropzone-icon">
@@ -425,11 +468,16 @@ export const UploadView: React.FC = () => {
           </h3>
           <p className="dropzone-sub">
             Files are automatically queued and processed in order. Supported
-            formats: <strong>.XLSX</strong>, <strong>.XLS</strong>
+            formats: <strong>.XLSX</strong>, <strong>.XLS</strong>, <strong>.CSV</strong>
           </p>
 
           <div className="dropzone-actions">
-            <label htmlFor="file-upload-input" className="btn btn-primary cursor-pointer">
+            <label
+              htmlFor="file-upload-input"
+              className="btn btn-primary cursor-pointer"
+              aria-disabled={isUploading}
+              style={isUploading ? { opacity: 0.6, pointerEvents: 'none' } : undefined}
+            >
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -438,7 +486,7 @@ export const UploadView: React.FC = () => {
                   d="M12 4v16m8-8H4"
                 />
               </svg>
-              Select & Queue Files
+              {isUploading ? 'Uploading...' : 'Select & Queue Files'}
             </label>
             <button
               type="button"
@@ -462,20 +510,20 @@ export const UploadView: React.FC = () => {
                 Active ETL jobs are pinned to the top in execution order
               </p>
             </div>
-            <span className="badge-count">{jobs.length} Total Jobs</span>
+            <span className="badge-count">{totalJobs} Total Jobs</span>
           </div>
 
           <Table<PipelineJob>
             rowKey="id"
             columns={columns}
-            dataSource={sortedJobs}
+            dataSource={jobs}
             pagination={{
                             current: page,
                             pageSize,
                             total: totalJobs,
                             showSizeChanger: true,
                             pageSizeOptions: ['5', '10', '20'],
-                            showTotal: () => `Total ${totalJobs} members`,
+                            showTotal: () => `Total ${totalJobs} jobs`,
                         }}
             scroll={{ x: 'max-content' }}
             rowClassName={(record) =>
