@@ -61,8 +61,10 @@ export interface PipelineJob {
 }
 
 export const UploadView: React.FC = () => {
-  const { getProgressUpload, uploadFile, jobs, totalJobs, setJobs } = useStore();
+  const { getProgressUpload, uploadFile, jobs, totalJobs } = useStore();
   const [authToken] = useLocalStorage('access_token');
+  // Resolving unmapped SKUs writes the SKU master, so only admins may do it
+  const isAdmin = ((authToken?.decoded_token?.roles ?? []) as string[]).includes('admin');
   const navigate = useNavigate()
   const [page, setPage] = useState(1);
       const [pageSize, setPageSize] = useState(5);
@@ -151,21 +153,6 @@ export const UploadView: React.FC = () => {
       message.success(`${queued} file${queued > 1 ? 's' : ''} queued for processing.`)
     }
     fetchProgress()
-  }
-
-  const handleResumeJob = (jobId: string) => {
-    setJobs((prev) =>
-      prev.map((job) =>
-        job.id === jobId
-          ? {
-              ...job,
-              status: 'Completed',
-              recordsSummary: 'All 14 SKUs sanitized & mapped to SKU Master',
-              statusDetail: undefined,
-            }
-          : job
-      )
-    )
   }
 
   // Ant Design Table Columns for Data Processing Pipeline
@@ -552,11 +539,12 @@ export const UploadView: React.FC = () => {
         {/* Sku Sanitization Modal */}
         {selectedPausedJob && (
           <SkuSanitizeModal
-            isOpen={Boolean(selectedPausedJob)}
+            key={selectedPausedJob.id}
+            uploadId={selectedPausedJob.id}
             fileName={selectedPausedJob.fileName}
-            marketplace={selectedPausedJob.marketplace}
+            isAdmin={isAdmin}
             onClose={() => setSelectedPausedJob(null)}
-            onResumeEtl={() => handleResumeJob(selectedPausedJob.id)}
+            onChanged={fetchProgress}
           />
         )}
       </div>
