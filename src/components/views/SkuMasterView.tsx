@@ -1,208 +1,113 @@
-import React, { useState } from 'react'
-import { Table, Tag, Button, Popconfirm, ConfigProvider } from 'antd'
-import type { TableColumnType, TableProps } from 'antd'
-import {
-  SearchOutlined,
-  DeleteOutlined,
-  EditOutlined,
-} from '@ant-design/icons'
+import React, { useEffect, useState } from 'react'
+import { Button, ConfigProvider, Dropdown, Table, message } from 'antd'
+import type { MenuProps, TableColumnType, TableProps } from 'antd'
+import type { FilterValue, SorterResult } from 'antd/es/table/interface'
+import { EyeOutlined, MoreOutlined, SearchOutlined } from '@ant-design/icons'
 import { ColumnSearchDropdown } from '../ColumnSearchDropdown'
+import { SkuDetailModal } from '../SkuDetailModal'
+import useStore from '../../store/store'
+import { useLocalStorage } from '../../hooks/useLocalStorage'
+import { extractErrorMessage } from '../../utils/api'
+import type { SkuListPayload, SkuRow } from '../../types/sku'
 
-interface SkuItem {
-  id: string
-  name: string
-  category: string
-  code: string
-  quantity: number
-  status: 'In Stock' | 'Low Stock' | 'Out of Stock'
-}
-
-const INITIAL_SKUS: SkuItem[] = [
-  {
-    id: 'SKU-001092',
-    name: 'Ultra-Light Running Shoes',
-    category: 'Footwear',
-    code: '8901248901',
-    quantity: 142,
-    status: 'In Stock',
-  },
-  {
-    id: 'SKU-001093',
-    name: 'Merino Wool Trail Socks',
-    category: 'Apparel',
-    code: '8901248902',
-    quantity: 28,
-    status: 'Low Stock',
-  },
-  {
-    id: 'SKU-001094',
-    name: 'Hydration Flask 750ml',
-    category: 'Accessories',
-    code: '8901248903',
-    quantity: 0,
-    status: 'Out of Stock',
-  },
-  {
-    id: 'SKU-001095',
-    name: 'Reflective Windbreaker Jacket',
-    category: 'Apparel',
-    code: '8901248904',
-    quantity: 65,
-    status: 'In Stock',
-  },
-  {
-    id: 'SKU-001096',
-    name: 'All-Terrain Trekking Poles',
-    category: 'Equipment',
-    code: '8901248905',
-    quantity: 19,
-    status: 'Low Stock',
-  },
-  {
-    id: 'SKU-001097',
-    name: 'Polarized Performance Sunglasses',
-    category: 'Accessories',
-    code: '8901248906',
-    quantity: 84,
-    status: 'In Stock',
-  },
-]
-
-const STATUS_OPTIONS: SkuItem['status'][] = [
-  'In Stock',
-  'Low Stock',
-  'Out of Stock',
+// Row actions; add more entries here and handle them in handleAction
+const ACTION_ITEMS: MenuProps['items'] = [
+  { key: 'detail', label: 'Show detail', icon: <EyeOutlined /> },
 ]
 
 export const SkuMasterView: React.FC = () => {
-  const [skuList, setSkuList] = useState<SkuItem[]>(INITIAL_SKUS)
+  const { getSkus, skus, totalSkus } = useStore()
+  const [authToken] = useLocalStorage('access_token')
 
-  const handleDelete = (id: string) => {
-    setSkuList((prev) => prev.filter((item) => item.id !== id))
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [filters, setFilters] = useState<Record<string, FilterValue | null>>({})
+  const [sorter, setSorter] = useState<SorterResult<SkuRow> | null>(null)
+  const [detailSku, setDetailSku] = useState<SkuRow | null>(null)
+
+  const payload: SkuListPayload = {
+    page,
+    size: pageSize,
+    filter: Object.fromEntries(
+      Object.entries(filters)
+        .filter(([, value]) => value && value[0] !== undefined && value[0] !== '')
+        .map(([key, value]) => [key, String(value![0])])
+    ),
+    sort: sorter?.order && sorter.columnKey
+      ? { [String(sorter.columnKey)]: sorter.order === 'ascend' ? 'asc' : 'desc' }
+      : {},
+  }
+  // The table shows a spinner until the response for the current request arrives
+  const requestKey = JSON.stringify(payload)
+  const [loadedKey, setLoadedKey] = useState<string | null>(null)
+
+  useEffect(() => {
+    getSkus(authToken.access_token, JSON.parse(requestKey))
+      .catch((err) => message.error(extractErrorMessage(err, 'Failed to load SKU master')))
+      .finally(() => setLoadedKey(requestKey))
+  }, [requestKey, authToken.access_token, getSkus])
+
+  const handleAction = (key: string, record: SkuRow) => {
+    if (key === 'detail') setDetailSku(record)
   }
 
-  // Reusable per-column text search (rendered in the column header dropdown)
-  const getColumnSearchProps = (
-    dataIndex: keyof SkuItem,
-    label: string
-  ): TableColumnType<SkuItem> => ({
-    filterDropdown: (props) => (
-      <ColumnSearchDropdown {...props} label={label} />
-    ),
+  const getColumnSearchProps = (label: string): TableColumnType<SkuRow> => ({
+    filterDropdown: (props) => <ColumnSearchDropdown {...props} label={label} />,
     filterIcon: (filtered: boolean) => (
       <SearchOutlined style={{ color: filtered ? '#4f46e5' : undefined }} />
     ),
-    onFilter: (value, record) =>
-      String(record[dataIndex])
-        .toLowerCase()
-        .includes(String(value).toLowerCase()),
   })
 
-  // Category filter options derived from the current catalog
-  const categoryFilters = Array.from(
-    new Set(skuList.map((item) => item.category))
-  )
-    .sort()
-    .map((category) => ({ text: category, value: category }))
-
-  const columns: TableProps<SkuItem>['columns'] = [
+  const columns: TableProps<SkuRow>['columns'] = [
     {
       title: 'SKU ID',
-      dataIndex: 'id',
-      key: 'id',
+      dataIndex: 'skuId',
+      key: 'skuId',
       width: 160,
-      sorter: (a, b) => a.id.localeCompare(b.id),
-      ...getColumnSearchProps('id', 'SKU ID'),
+      sorter: true,
+      sortOrder: sorter?.columnKey === 'skuId' ? sorter.order : null,
+      filteredValue: filters.skuId ?? null,
+      ...getColumnSearchProps('SKU ID'),
       render: (id: string) => (
         <span className="sku-id-badge font-mono font-semibold">{id}</span>
       ),
     },
     {
+      title: 'Latest Seller SKU',
+      dataIndex: 'sellerSku',
+      key: 'sellerSku',
+      width: 200,
+      sorter: true,
+      sortOrder: sorter?.columnKey === 'sellerSku' ? sorter.order : null,
+      filteredValue: filters.sellerSku ?? null,
+      ...getColumnSearchProps('seller SKU'),
+      render: (code: string | null) => <span className="font-mono text-xs">{code ?? '—'}</span>,
+    },
+    {
       title: 'Product Name',
-      dataIndex: 'name',
-      key: 'name',
-      sorter: (a, b) => a.name.localeCompare(b.name),
-      ...getColumnSearchProps('name', 'product name'),
+      dataIndex: 'productName',
+      key: 'productName',
+      sorter: true,
+      sortOrder: sorter?.columnKey === 'productName' ? sorter.order : null,
+      filteredValue: filters.productName ?? null,
+      ...getColumnSearchProps('product name'),
       render: (name: string) => (
         <span className="font-semibold text-slate-900">{name}</span>
       ),
     },
     {
-      title: 'Category',
-      dataIndex: 'category',
-      key: 'category',
-      width: 150,
-      filters: categoryFilters,
-      onFilter: (value, record) => record.category === value,
-      sorter: (a, b) => a.category.localeCompare(b.category),
-    },
-    {
-      title: 'Barcode / Code',
-      dataIndex: 'code',
-      key: 'code',
-      width: 160,
-      sorter: (a, b) => a.code.localeCompare(b.code),
-      ...getColumnSearchProps('code', 'barcode'),
-      render: (code: string) => <span className="font-mono text-xs">{code}</span>,
-    },
-    {
-      title: 'Quantity',
-      dataIndex: 'quantity',
-      key: 'quantity',
-      width: 120,
-      sorter: (a, b) => a.quantity - b.quantity,
-      render: (qty: number) => <span className="font-semibold">{qty}</span>,
-    },
-    {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      width: 150,
-      filters: STATUS_OPTIONS.map((status) => ({ text: status, value: status })),
-      onFilter: (value, record) => record.status === value,
-      sorter: (a, b) => a.status.localeCompare(b.status),
-      render: (status: SkuItem['status']) => {
-        let color = 'green'
-        if (status === 'Low Stock') color = 'warning'
-        if (status === 'Out of Stock') color = 'error'
-
-        return (
-          <Tag color={color} style={{ borderRadius: 12, padding: '2px 10px' }}>
-            {status}
-          </Tag>
-        )
-      },
-    },
-    {
-      title: 'Actions',
+      title: 'Action',
       key: 'actions',
-      width: 130,
+      width: 72,
       align: 'right',
       fixed: 'right',
       render: (_, record) => (
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <Button
-            type="text"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => alert(`Edit ${record.id}`)}
-          />
-          <Popconfirm
-            title="Delete SKU"
-            description={`Are you sure you want to delete ${record.id}?`}
-            onConfirm={() => handleDelete(record.id)}
-            okText="Delete"
-            cancelText="Cancel"
-            okButtonProps={{ danger: true }}
-          >
-            <Button
-              type="text"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-            />
-          </Popconfirm>
-        </div>
+        <Dropdown
+          trigger={['click']}
+          menu={{ items: ACTION_ITEMS, onClick: ({ key }) => handleAction(key, record) }}
+        >
+          <Button type="text" icon={<MoreOutlined />} aria-label="Row actions" />
+        </Dropdown>
       ),
     },
   ]
@@ -217,21 +122,44 @@ export const SkuMasterView: React.FC = () => {
       }}
     >
       <div className="view-container sku-view">
-        {/* Ant Design SKU Table Card */}
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <Table<SkuItem>
+          <Table<SkuRow>
             rowKey="id"
             columns={columns}
-            dataSource={skuList}
+            dataSource={skus}
+            loading={loadedKey !== requestKey}
             pagination={{
-              pageSize: 5,
+              current: page,
+              pageSize,
+              total: totalSkus,
               showSizeChanger: true,
-              pageSizeOptions: ['5', '10', '20'],
-              showTotal: (total) => `Total ${total} items`,
+              pageSizeOptions: ['10', '20', '50'],
+              showTotal: (total) => `Total ${total} SKUs`,
             }}
             scroll={{ x: 'max-content' }}
+            onChange={(pagination, nextFilters, nextSorter) => {
+              const nextSorterResult = Array.isArray(nextSorter) ? nextSorter[0] ?? null : nextSorter
+              const filtersChanged = JSON.stringify(nextFilters) !== JSON.stringify(filters)
+              const sorterChanged =
+                nextSorterResult?.columnKey !== sorter?.columnKey ||
+                nextSorterResult?.order !== sorter?.order
+
+              setFilters(nextFilters)
+              setSorter(nextSorterResult)
+              setPageSize(pagination.pageSize ?? pageSize)
+              // A new filter/sort makes the old page number meaningless, so jump back to page 1.
+              setPage(filtersChanged || sorterChanged ? 1 : (pagination.current ?? 1))
+            }}
           />
         </div>
+
+        {detailSku && (
+          <SkuDetailModal
+            key={detailSku.id}
+            sku={detailSku}
+            onClose={() => setDetailSku(null)}
+          />
+        )}
       </div>
     </ConfigProvider>
   )

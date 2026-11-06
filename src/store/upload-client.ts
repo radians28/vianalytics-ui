@@ -1,4 +1,5 @@
 import { ApiClient } from "../utils/api-client";
+import type { SkuDecision } from "../types/sku-review";
 
 export class UploadClientApi extends ApiClient {
     constructor(baseURL = '/api') {
@@ -17,6 +18,21 @@ export class UploadClientApi extends ApiClient {
 
     async getUploadProgress(token: string, payload: any) {
         const { data } = await this.authorized(token).post('/progress', payload);
+        return data;
+    }
+
+    async getSkuReview(token: string, uploadId: string) {
+        const { data } = await this.authorized(token).get(`/${uploadId}/sku-review`);
+        return data;
+    }
+
+    async resolveSkuReview(token: string, uploadId: string, decisions: SkuDecision[]) {
+        const { data } = await this.authorized(token).post(`/${uploadId}/sku-review/resolve`, { decisions });
+        return data;
+    }
+
+    async resumeUpload(token: string, uploadId: string) {
+        const { data } = await this.authorized(token).post(`/${uploadId}/resume`);
         return data;
     }
 }

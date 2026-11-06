@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import { UserClientApi } from "./user-client";
 import { UploadClientApi } from "./upload-client";
+import { SkuClientApi } from "./sku-client";
+import type { SkuHistoryRow, SkuListPayload, SkuPlatformRow, SkuRow } from "../types/sku";
+import type { ResolveResult, ResumeResult, SkuDecision, SkuReview } from "../types/sku-review";
 
 // Built images set VITE_API_BASE_URL=/api (nginx proxies it to the svc);
 // local `pnpm dev` falls back to the svc running on port 3000.
@@ -8,6 +11,7 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/a
 
 const userClient = new UserClientApi(apiBaseUrl);
 const uploadClient = new UploadClientApi(apiBaseUrl);
+const skuClient = new SkuClientApi(apiBaseUrl);
 
 export interface UserStore {
     login: (userEmail: string, userPass: string) => Promise<any | null>;
@@ -36,6 +40,18 @@ export interface UserStore {
 
     setJobs: (jobs: any[] | ((prev: any[]) => any[])) => void;
 
+    getSkus: (token: string, payload: SkuListPayload) => Promise<void>;
+    getSkuHistory: (token: string, skuId: number) => Promise<SkuHistoryRow[]>;
+    getSkuPlatforms: (token: string, skuId: number) => Promise<SkuPlatformRow[]>;
+    searchSkus: (token: string, query: string) => Promise<SkuRow[]>;
+
+    getSkuReview: (token: string, uploadId: string) => Promise<SkuReview>;
+    resolveSkuReview: (token: string, uploadId: string, decisions: SkuDecision[]) => Promise<ResolveResult>;
+    resumeUpload: (token: string, uploadId: string) => Promise<{ resume: ResumeResult; uploadStatus: string }>;
+
+    skus: SkuRow[];
+    totalSkus: number;
+
     members: any[];
     totalMembers: number;
 
@@ -49,6 +65,9 @@ const useStore = create<UserStore>((set, get) => ({
 
     totalJobs: 0,
     jobs: [],
+
+    skus: [],
+    totalSkus: 0,
 
     async login(userEmail: string, userPass: string) {
         try {
@@ -128,6 +147,45 @@ const useStore = create<UserStore>((set, get) => ({
     setJobs(jobs) {
         const next = typeof jobs === 'function' ? jobs(get().jobs) : jobs;
         set({ jobs: next, totalJobs: next.length })
+    },
+
+    // None of the SKU methods swallow errors — the SKU view and detail modal
+    // show the failure to the user.
+    async getSkus(token, payload) {
+        const { data, meta: { total } } = await skuClient.getSkus(token, payload);
+        set({ skus: data, totalSkus: total });
+    },
+
+    async getSkuHistory(token, skuId) {
+        const { data } = await skuClient.getSkuHistory(token, skuId);
+        return data;
+    },
+
+    async getSkuPlatforms(token, skuId) {
+        const { data } = await skuClient.getSkuPlatforms(token, skuId);
+        return data;
+    },
+
+    async searchSkus(token, query) {
+        const { data } = await skuClient.searchSkus(token, query);
+        return data;
+    },
+
+    // The SKU review methods don't swallow errors either: the modal shows the
+    // API's reason (e.g. "Every unmapped SKU needs a decision").
+    async getSkuReview(token, uploadId) {
+        const { data } = await uploadClient.getSkuReview(token, uploadId);
+        return data;
+    },
+
+    async resolveSkuReview(token, uploadId, decisions) {
+        const { data } = await uploadClient.resolveSkuReview(token, uploadId, decisions);
+        return data;
+    },
+
+    async resumeUpload(token, uploadId) {
+        const { data } = await uploadClient.resumeUpload(token, uploadId);
+        return data;
     },
 }));
 

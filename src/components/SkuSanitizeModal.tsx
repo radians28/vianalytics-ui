@@ -1,248 +1,514 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import axios from 'axios'
+import {
+  Alert,
+  Button,
+  Descriptions,
+  Empty,
+  Input,
+  Modal,
+  Popconfirm,
+  Radio,
+  Select,
+  Spin,
+  Tag,
+  Tooltip,
+  message,
+} from 'antd'
+import { PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons'
+import useStore from '../store/store'
+import { useLocalStorage } from '../hooks/useLocalStorage'
+import { extractErrorMessage } from '../utils/api'
+import { formatJakarta } from '../utils/date'
+import type { SkuRow } from '../types/sku'
+import type { SkuDecision, SkuReview, SkuReviewItem } from '../types/sku-review'
 
-export interface UnmatchedSkuItem {
-  id: string
-  rawTitle: string
-  rawSku: string
-  marketplace: string
-  suggestedSkuId: string
-  suggestedTitle: string
-  suggestedCategory: string
-  similarityScore: number
-  status: 'pending' | 'mapped' | 'created_new'
+// What the admin picked for a pending listing: a suggested SKU, another SKU
+// found by search, or a new SKU
+type Mode = `cand:${number}` | 'other' | 'create'
+
+const scoreTag = (score: number | null) => {
+  if (score === null) return null
+  const color = score >= 0.85 ? 'green' : score >= 0.7 ? 'gold' : 'default'
+  return <Tag color={color}>{Math.round(score * 100)}% name match</Tag>
 }
 
-interface SkuSanitizeModalProps {
-  isOpen: boolean
-  fileName: string
-  marketplace: string
-  onClose: () => void
-  onResumeEtl: () => void
+// ------------------------------------------------------------------ SKU picker
+
+interface SkuSearchSelectProps {
+  token: string
+  value?: SkuRow
+  disabled?: boolean
+  onChange: (sku: SkuRow) => void
 }
 
-const SAMPLE_UNMATCHED: UnmatchedSkuItem[] = [
-  {
-    id: 'unmatched-1',
-    rawTitle: 'Sepatu Lari Ultra-Light Black 42',
-    rawSku: 'TKP-SHOES-UL-BLK-42',
-    marketplace: 'Tokopedia',
-    suggestedSkuId: 'SKU-001092',
-    suggestedTitle: 'Ultra-Light Running Shoes',
-    suggestedCategory: 'Footwear',
-    similarityScore: 94,
-    status: 'pending',
-  },
-  {
-    id: 'unmatched-2',
-    rawTitle: 'Kaos Kaki Lari Merino Breathable',
-    rawSku: 'TKP-SOCKS-MRN-01',
-    marketplace: 'Tokopedia',
-    suggestedSkuId: 'SKU-001093',
-    suggestedTitle: 'Merino Wool Trail Socks',
-    suggestedCategory: 'Apparel',
-    similarityScore: 89,
-    status: 'pending',
-  },
-]
+// Server-side search over SKU ID, latest and older seller SKUs and product name
+const SkuSearchSelect: React.FC<SkuSearchSelectProps> = ({ token, value, disabled, onChange }) => {
+  const { searchSkus } = useStore()
+  const [options, setOptions] = useState<SkuRow[]>(value ? [value] : [])
+  const [loading, setLoading] = useState(false)
+  const timer = useRef<number | undefined>(undefined)
+  const latestRequest = useRef(0)
 
-export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
-  isOpen,
-  fileName,
-  marketplace,
-  onClose,
-  onResumeEtl,
-}) => {
-  const [items, setItems] = useState<UnmatchedSkuItem[]>(SAMPLE_UNMATCHED)
-  const [currentIndex, setCurrentIndex] = useState(0)
-
-  if (!isOpen) return null
-
-  const currentItem = items[currentIndex] || items[0]
-  const allResolved = items.every((i) => i.status !== 'pending')
-
-  const handleApproveMapping = (id: string) => {
-    setItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status: 'mapped' } : item))
-    )
-    if (currentIndex < items.length - 1) {
-      setCurrentIndex((prev) => prev + 1)
-    }
+  const search = (query: string) => {
+    window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => {
+      const request = ++latestRequest.current
+      setLoading(true)
+      searchSkus(token, query)
+        .then((rows) => {
+          if (request === latestRequest.current) setOptions(rows)
+        })
+        .catch((err) => message.error(extractErrorMessage(err, 'SKU search failed')))
+        .finally(() => {
+          if (request === latestRequest.current) setLoading(false)
+        })
+    }, 300)
   }
 
-  const handleCreateNewSku = (id: string) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, status: 'created_new' } : item
-      )
-    )
-    if (currentIndex < items.length - 1) {
-      setCurrentIndex((prev) => prev + 1)
-    }
-  }
-
-  const handleResume = () => {
-    onResumeEtl()
-    onClose()
-  }
+  useEffect(() => () => window.clearTimeout(timer.current), [])
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal-container" role="dialog" aria-modal="true">
-        {/* Modal Header */}
-        <div className="modal-header">
-          <div className="modal-header-info">
-            <div className="modal-icon-alert">
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-            </div>
-            <div>
-              <h3 className="modal-title">SKU Sanitization & Name Similarity Resolution</h3>
-              <p className="modal-subtitle">
-                File: <span className="font-mono text-highlight">{fileName}</span> ({marketplace})
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="modal-close-btn"
-            aria-label="Close"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Modal Body */}
-        <div className="modal-body">
-          <div className="etl-condition-notice">
-            <div className="notice-icon">
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            </div>
-            <div className="notice-text">
-              Transaction SKU does not exist in{' '}
-              <strong>SKU Master</strong>, but the incoming raw product title matches an existing
-              catalog item with high similarity. Review and validate mappings below to resume the
-              pipeline.
+    <Select<number>
+      style={{ width: '100%' }}
+      placeholder="Search SKU ID, seller SKU or product name"
+      disabled={disabled}
+      value={value?.id}
+      showSearch={{ filterOption: false, onSearch: search }}
+      onFocus={() => {
+        if (options.length <= 1) search('')
+      }}
+      notFoundContent={loading ? <Spin size="small" /> : 'No SKU found'}
+      onChange={(id) => {
+        const sku = options.find((o) => o.id === id)
+        if (sku) onChange(sku)
+      }}
+      options={options.map((o) => ({ value: o.id, label: `${o.skuId} · ${o.productName}` }))}
+      optionRender={(option) => {
+        const sku = options.find((o) => o.id === option.value)
+        if (!sku) return option.label
+        return (
+          <div>
+            <span className="font-mono font-semibold">{sku.skuId}</span> {sku.productName}
+            <div className="font-mono text-xs" style={{ color: '#64748b' }}>
+              Seller SKU: {sku.sellerSku ?? '—'}
             </div>
           </div>
-
-          {/* Similarity Card */}
-          <div className="similarity-card">
-            <div className="similarity-card-header">
-              <span className="item-counter">
-                Item {currentIndex + 1} of {items.length}
-              </span>
-              <span className="similarity-badge">
-                <svg fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                {currentItem.similarityScore}% Name Similarity
-              </span>
-            </div>
-
-            <div className="comparison-grid">
-              {/* Raw Transaction Info */}
-              <div className="source-record-box">
-                <span className="box-tag tag-source">Incoming Transaction Record</span>
-                <div className="record-title">{currentItem.rawTitle}</div>
-                <div className="record-meta font-mono">Raw SKU: {currentItem.rawSku}</div>
-                <div className="record-source">Marketplace: {currentItem.marketplace}</div>
-              </div>
-
-              {/* Suggested SKU Master Match */}
-              <div className="target-record-box">
-                <span className="box-tag tag-target">Suggested Master SKU</span>
-                <div className="record-title">{currentItem.suggestedTitle}</div>
-                <div className="record-meta font-mono text-primary-color">
-                  {currentItem.suggestedSkuId} • {currentItem.suggestedCategory}
-                </div>
-                <div className="record-source">
-                  Status:{' '}
-                  {currentItem.status === 'mapped'
-                    ? '✓ Mapped'
-                    : currentItem.status === 'created_new'
-                      ? '✓ Registered as New SKU'
-                      : 'Pending Approval'}
-                </div>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="comparison-actions">
-              <button
-                type="button"
-                className="btn btn-secondary text-xs"
-                onClick={() => handleCreateNewSku(currentItem.id)}
-              >
-                + Create as New SKU in Master
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary text-xs"
-                onClick={() => handleApproveMapping(currentItem.id)}
-              >
-                ✓ Map to {currentItem.suggestedSkuId}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Modal Footer */}
-        <div className="modal-footer">
-          <span className="footer-status-text">
-            {items.filter((i) => i.status !== 'pending').length} of {items.length} items mapped
-          </span>
-          <div className="footer-actions">
-            <button type="button" onClick={onClose} className="btn btn-secondary">
-              Close
-            </button>
-            <button
-              type="button"
-              onClick={handleResume}
-              className="btn btn-success"
-              title={
-                allResolved
-                  ? 'Resume ETL processing'
-                  : 'Resume ETL with current mappings'
-              }
-            >
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <span>Approve & Resume ETL Process</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+        )
+      }}
+    />
   )
 }
 
+// ------------------------------------------------------------------ modal
+
+interface SkuSanitizeModalProps {
+  uploadId: string
+  fileName: string
+  isAdmin: boolean
+  onClose: () => void
+  onChanged: () => void   // the upload's status changed; refresh the pipeline table
+}
+
+// Render with key={uploadId} so each upload starts with fresh state.
+export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
+  uploadId,
+  fileName,
+  isAdmin,
+  onClose,
+  onChanged,
+}) => {
+  const { getSkuReview, resolveSkuReview, resumeUpload } = useStore()
+  const [authToken] = useLocalStorage('access_token')
+  const token: string = authToken.access_token
+
+  const [review, setReview] = useState<SkuReview | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [modes, setModes] = useState<Record<number, Mode>>({})
+  const [otherSku, setOtherSku] = useState<Record<number, SkuRow>>({})
+  const [newNames, setNewNames] = useState<Record<number, string>>({})
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    getSkuReview(token, uploadId)
+      .then((data) => {
+        setReview(data)
+        setSelectedId((current) => current ?? data.items.find((i) => i.status === 'PENDING')?.matchId ?? null)
+      })
+      .catch((err) => setLoadError(extractErrorMessage(err, 'Failed to load the SKU review')))
+  }, [getSkuReview, token, uploadId, reloadKey])
+
+  // Fetch again from scratch (after a save, or when the pending set changed)
+  const reload = () => {
+    setReview(null)
+    setLoadError(null)
+    setSelectedId(null)
+    setModes({})
+    setOtherSku({})
+    setNewNames({})
+    setReloadKey((k) => k + 1)
+  }
+
+  const pending = review?.items.filter((i) => i.status === 'PENDING') ?? []
+  const resolvedItems = review?.items.filter((i) => i.status !== 'PENDING') ?? []
+  const selected = pending.find((i) => i.matchId === selectedId) ?? null
+
+  const decisionOf = (item: SkuReviewItem): SkuDecision | null => {
+    const mode = modes[item.matchId]
+    if (!mode) return null
+    if (mode === 'create') {
+      const name = (newNames[item.matchId] ?? item.productName ?? '').trim()
+      return { matchId: item.matchId, action: 'create', productName: name || undefined }
+    }
+    if (mode === 'other') {
+      const sku = otherSku[item.matchId]
+      return sku ? { matchId: item.matchId, action: 'map', skuId: sku.id } : null
+    }
+    return { matchId: item.matchId, action: 'map', skuId: Number(mode.slice('cand:'.length)) }
+  }
+
+  const decisions = pending.map(decisionOf).filter((d): d is SkuDecision => d !== null)
+  const mappedCount = decisions.filter((d) => d.action === 'map').length
+  const createCount = decisions.length - mappedCount
+  const allDecided = pending.length > 0 && decisions.length === pending.length
+  const canApprove = isAdmin && allDecided && !submitting
+  const approveHint = !isAdmin
+    ? 'Only admins can resolve SKUs'
+    : allDecided
+      ? ''
+      : `${pending.length - decisions.length} SKU(s) still need a decision`
+
+  const setMode = (matchId: number, mode: Mode) => setModes((prev) => ({ ...prev, [matchId]: mode }))
+
+  const decisionTag = (item: SkuReviewItem) => {
+    const decision = decisionOf(item)
+    if (!decision) return <Tag>Pending</Tag>
+    if (decision.action === 'create') return <Tag color="green">New SKU</Tag>
+    const code = modes[item.matchId] === 'other'
+      ? otherSku[item.matchId]?.skuId
+      : item.candidates.find((c) => c.id === decision.skuId)?.skuId
+    return <Tag color="blue">→ {code}</Tag>
+  }
+
+  const approve = async () => {
+    setSubmitting(true)
+    try {
+      const result = await resolveSkuReview(token, uploadId, decisions)
+      onChanged()
+      const created = result.created.length
+      const summary = `${result.mapped} mapped, ${created} new SKU${created === 1 ? '' : 's'}`
+      if (result.resume.triggered) {
+        message.success(`${summary}. ETL resumed.`)
+        onClose()
+      } else {
+        message.warning(`${summary} saved, but the ETL could not resume. You can retry here.`)
+        reload()
+      }
+    } catch (err) {
+      message.error(extractErrorMessage(err, 'Failed to resolve the SKUs'))
+      if (axios.isAxiosError(err) && err.response?.status === 409) reload()
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const retryResume = async () => {
+    setSubmitting(true)
+    try {
+      const result = await resumeUpload(token, uploadId)
+      onChanged()
+      if (result.resume.triggered) {
+        message.success('ETL resumed.')
+        onClose()
+      } else {
+        message.warning('The ETL could not resume yet.')
+        reload()
+      }
+    } catch (err) {
+      message.error(extractErrorMessage(err, 'Failed to resume the ETL'))
+      if (axios.isAxiosError(err) && err.response?.status === 409) reload()
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // ---------------------------------------------------------------- render parts
+
+  const header = (
+    <div>
+      <div style={{ fontWeight: 600 }}>SKU review · {fileName}</div>
+      {review && (
+        <div style={{ fontWeight: 400, fontSize: 12, color: '#64748b', marginTop: 4 }}>
+          <Tag color={review.upload.status === 'Paused' ? 'warning' : 'default'}>{review.upload.status}</Tag>
+          {review.upload.marketplace} · uploaded {formatJakarta(review.upload.createdAt)}
+          {review.upload.totalRows !== null && ` · ${review.upload.totalRows.toLocaleString('id-ID')} rows`}
+        </div>
+      )}
+    </div>
+  )
+
+  const itemList = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto', maxHeight: 480 }}>
+      {pending.length > 0 && (
+        <div className="text-xs" style={{ color: '#64748b', fontWeight: 600 }}>
+          UNMAPPED SKUS ({pending.length})
+        </div>
+      )}
+      {pending.map((item) => {
+        const active = item.matchId === selectedId
+        return (
+          <button
+            key={item.matchId}
+            type="button"
+            onClick={() => setSelectedId(item.matchId)}
+            style={{
+              textAlign: 'left',
+              padding: '8px 10px',
+              borderRadius: 8,
+              border: `1px solid ${active ? '#a5b4fc' : '#e5e7eb'}`,
+              background: active ? '#eef2ff' : '#fff',
+              cursor: 'pointer',
+            }}
+          >
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{item.productName ?? item.merchantSku}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+              <span className="font-mono text-xs" style={{ color: '#64748b' }}>
+                {item.sellerSku ?? 'no seller SKU'}
+              </span>
+              {decisionTag(item)}
+            </div>
+          </button>
+        )
+      })}
+
+      {resolvedItems.length > 0 && (
+        <>
+          <div className="text-xs" style={{ color: '#64748b', fontWeight: 600, marginTop: 8 }}>
+            ALREADY RESOLVED ({resolvedItems.length})
+          </div>
+          {resolvedItems.map((item) => (
+            <div
+              key={item.matchId}
+              style={{ padding: '6px 10px', borderRadius: 8, border: '1px dashed #e5e7eb', fontSize: 12 }}
+            >
+              <div style={{ fontWeight: 600 }}>{item.productName ?? item.merchantSku}</div>
+              <div style={{ color: '#64748b', marginTop: 2 }}>
+                <Tag color={item.status === 'MAPPED' ? 'blue' : 'green'}>
+                  {item.status === 'MAPPED' ? 'Mapped' : 'New SKU'}
+                </Tag>
+                {item.resolved?.skuId} · {item.resolved?.by ?? '—'}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  )
+
+  const detail = (item: SkuReviewItem) => {
+    const mode = modes[item.matchId]
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div>
+          <div className="text-xs" style={{ color: '#64748b', fontWeight: 600, marginBottom: 6 }}>
+            INCOMING LISTING · {item.channel.toUpperCase()}
+          </div>
+          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>{item.productName ?? '—'}</div>
+          <Descriptions
+            size="small"
+            column={2}
+            bordered
+            items={[
+              { key: 'seller', label: 'Seller SKU', children: <span className="font-mono">{item.sellerSku ?? '—'}</span> },
+              { key: 'platform', label: 'Platform SKU', children: <span className="font-mono">{item.merchantSku}</span> },
+              { key: 'variation', label: 'Variation', children: item.variation ?? '—' },
+              { key: 'lines', label: 'Order lines', children: item.orderLineCount ?? '—' },
+              { key: 'first', label: 'First order', children: formatJakarta(item.firstOrderAt) },
+              { key: 'last', label: 'Last order', children: formatJakarta(item.lastOrderAt) },
+            ]}
+          />
+        </div>
+
+        <Radio.Group
+          value={mode}
+          disabled={!isAdmin}
+          onChange={(e) => setMode(item.matchId, e.target.value as Mode)}
+          style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+        >
+          <div className="text-xs" style={{ color: '#64748b', fontWeight: 600, fontSize: 12 }}>
+            SUGGESTED BY NAME SIMILARITY
+          </div>
+          {item.candidates.length === 0 && (
+            <span className="text-xs" style={{ color: '#94a3b8', fontSize: 12 }}>No suggestion</span>
+          )}
+          {item.candidates.map((candidate, index) => (
+            <div
+              key={candidate.id}
+              style={{
+                padding: '8px 10px',
+                borderRadius: 8,
+                border: `1px solid ${mode === `cand:${candidate.id}` ? '#a5b4fc' : '#e5e7eb'}`,
+              }}
+            >
+              <Radio value={`cand:${candidate.id}`}>
+                <span className="sku-id-badge font-mono font-semibold">{candidate.skuId}</span>{' '}
+                <span style={{ fontWeight: 600 }}>{candidate.productName}</span>{' '}
+                {index === 0 && <Tag color="purple">Recommended</Tag>}
+                {scoreTag(candidate.score)}
+                <div className="font-mono text-xs" style={{ color: '#64748b', marginTop: 2 }}>
+                  Latest seller SKU: {candidate.sellerSku ?? '—'}
+                </div>
+              </Radio>
+            </div>
+          ))}
+
+          <div className="text-xs" style={{ color: '#64748b', fontWeight: 600, marginTop: 8, fontSize: 12 }}>
+            OR
+          </div>
+          <div
+            style={{
+              padding: '8px 10px',
+              borderRadius: 8,
+              border: `1px solid ${mode === 'other' ? '#a5b4fc' : '#e5e7eb'}`,
+            }}
+          >
+            <Radio value="other">Map to another SKU</Radio>
+            <div style={{ marginTop: 8 }}>
+              <SkuSearchSelect
+                key={item.matchId}
+                token={token}
+                disabled={!isAdmin}
+                value={otherSku[item.matchId]}
+                onChange={(sku) => {
+                  setOtherSku((prev) => ({ ...prev, [item.matchId]: sku }))
+                  setMode(item.matchId, 'other')
+                }}
+              />
+            </div>
+          </div>
+          <div
+            style={{
+              padding: '8px 10px',
+              borderRadius: 8,
+              border: `1px solid ${mode === 'create' ? '#86efac' : '#e5e7eb'}`,
+            }}
+          >
+            <Radio value="create">Register as a new SKU</Radio>
+            <Input
+              style={{ marginTop: 8 }}
+              disabled={!isAdmin || mode !== 'create'}
+              maxLength={300}
+              placeholder="Product name of the new SKU"
+              value={newNames[item.matchId] ?? item.productName ?? ''}
+              onChange={(e) => setNewNames((prev) => ({ ...prev, [item.matchId]: e.target.value }))}
+            />
+          </div>
+        </Radio.Group>
+      </div>
+    )
+  }
+
+  const renderBody = () => {
+    if (loadError) {
+      return (
+        <Alert
+          type="error"
+          showIcon
+          message={loadError}
+          action={<Button size="small" icon={<ReloadOutlined />} onClick={reload}>Retry</Button>}
+        />
+      )
+    }
+    if (!review) {
+      return <div style={{ textAlign: 'center', padding: 48 }}><Spin /></div>
+    }
+    if (pending.length === 0) {
+      if (review.upload.status === 'Paused') {
+        return (
+          <>
+            <Alert
+              type="warning"
+              showIcon
+              message="All SKUs of this upload are resolved, but the ETL has not resumed yet."
+              description={review.upload.resumeError ?? undefined}
+              action={
+                <Tooltip title={isAdmin ? '' : 'Only admins can resume the ETL'}>
+                  <Button
+                    type="primary"
+                    icon={<PlayCircleOutlined />}
+                    loading={submitting}
+                    disabled={!isAdmin}
+                    onClick={retryResume}
+                  >
+                    Resume ETL
+                  </Button>
+                </Tooltip>
+              }
+            />
+            {resolvedItems.length > 0 && <div style={{ marginTop: 16 }}>{itemList}</div>}
+          </>
+        )
+      }
+      return <Empty description={`This upload is ${review.upload.status}; no SKU waits for review.`} />
+    }
+    return (
+      <>
+        {!isAdmin && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="Only admins can resolve SKUs. You can review the suggestions."
+          />
+        )}
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 320px) 1fr', gap: 20 }}>
+          {itemList}
+          <div>{selected ? detail(selected) : <Empty description="Select an unmapped SKU" />}</div>
+        </div>
+      </>
+    )
+  }
+
+  const footer = (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <span className="text-xs" style={{ color: '#64748b' }}>
+        {pending.length > 0 && `${decisions.length} of ${pending.length} decided`}
+      </span>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Button onClick={onClose}>Close</Button>
+        {pending.length > 0 && (
+          <Popconfirm
+            title="Approve and resume the ETL?"
+            description={`${mappedCount} mapped to existing SKUs, ${createCount} registered as new SKUs. The SKU master is updated.`}
+            okText="Approve"
+            disabled={!canApprove}
+            onConfirm={approve}
+          >
+            <Tooltip title={approveHint}>
+              <Button type="primary" icon={<PlayCircleOutlined />} loading={submitting} disabled={!canApprove}>
+                Approve & Resume ETL
+              </Button>
+            </Tooltip>
+          </Popconfirm>
+        )}
+      </div>
+    </div>
+  )
+
+  return (
+    <Modal
+      open
+      onCancel={onClose}
+      width={1100}
+      style={{ top: 24 }}
+      // keep the footer (Approve) on screen; the body scrolls instead
+      styles={{ body: { maxHeight: 'calc(100vh - 220px)', overflowY: 'auto', paddingRight: 4 } }}
+      title={header}
+      footer={footer}
+    >
+      {renderBody()}
+    </Modal>
+  )
+}

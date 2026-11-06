@@ -1512,6 +1512,8 @@
    SKU MASTER VIEW
    ========================================================= */
 .sku-view {
+  /* fill up to max-width; without it the view shrinks to its table's content */
+  width: 100%;
   max-width: 1180px;
   margin: 0 auto;
   display: flex;

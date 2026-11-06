@@ -33,7 +33,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onToggleSidebar, auth
     },
     sku: {
       title: 'SKU Master',
-      subtitle: 'Manage products, inventory items, codes, and stock levels',
+      subtitle: 'Master SKUs with their seller SKU history and marketplace listings',
     },
     team: {
       title: 'Team Members',
