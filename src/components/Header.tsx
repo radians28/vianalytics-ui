@@ -28,12 +28,20 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onToggleSidebar, auth
 
   const headerContent: Record<TabType, { title: string; subtitle: string }> = {
     upload: {
-      title: 'Data Upload',
-      subtitle: 'Import datasets, files, and SKU manifests into Vianalytics',
+      title: 'Upload Order',
+      subtitle: 'Import marketplace order exports into Vianalytics',
+    },
+    traffic: {
+      title: 'Upload Traffic',
+      subtitle: 'Load daily marketplace visitors from each traffic export',
     },
     sku: {
       title: 'SKU Master',
       subtitle: 'Master SKUs with their seller SKU history and marketplace listings',
+    },
+    bundle: {
+      title: 'SKU Bundling',
+      subtitle: 'Bundle SKUs and their component breakdown with price ratio',
     },
     team: {
       title: 'Team Members',

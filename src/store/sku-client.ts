@@ -12,6 +12,20 @@ export class SkuClientApi extends ApiClient {
         return data;
     }
 
+    async getBundles(token: string, payload: SkuListPayload) {
+        const { data } = await this.authorized(token).post('/bundles', payload);
+        return data;
+    }
+
+    // mode 'preview' validates only; 'apply' replaces the bundles in the file
+    async uploadBundles(token: string, file: File, mode: 'preview' | 'apply') {
+        const form = new FormData();
+        form.append('file', file);
+        form.append('data', JSON.stringify({ mode }));
+        const { data } = await this.authorized(token).post('/bundles/upload', form);
+        return data;
+    }
+
     async searchSkus(token: string, query: string, limit = 20) {
         const { data } = await this.authorized(token).get('/search', { params: { q: query, limit } });
         return data;

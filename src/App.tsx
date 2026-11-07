@@ -5,8 +5,10 @@ import { useLocalStorage } from './hooks/useLocalStorage'
 import LoginPage from './pages/LoginPage';
 import MainPage from './pages/MainPage'
 import VerifyPage from './pages/VerifyPage'
+import { SkuBundlingView } from './components/views/SkuBundlingView'
 import { SkuMasterView } from './components/views/SkuMasterView'
 import { TeamView } from './components/views/TeamView'
+import { TrafficUploadView } from './components/views/TrafficUploadView'
 import { UploadView } from './components/views/UploadView'
 import { SESSION_EXPIRED_EVENT } from './utils/api-client'
 
@@ -28,6 +30,8 @@ function App() {
   // truthy — checking it directly never falls through to the login page.
   // What actually indicates "logged in" is a non-empty access token string.
   const isAuthenticated = Boolean(authToken?.access_token);
+  // Team management is the only admin-only page; everything else is open to any signed-in user
+  const isAdmin = ((authToken?.decoded_token?.roles ?? []) as string[]).includes('admin');
 
   return (
     <BrowserRouter>
@@ -50,8 +54,10 @@ function App() {
           }
         >
           <Route path="/upload" element={<UploadView />} />
+          <Route path="/upload-traffic" element={<TrafficUploadView />} />
           <Route path="/sku" element={<SkuMasterView />} />
-          <Route path="/team" element={<TeamView />} />
+          <Route path="/sku-bundling" element={<SkuBundlingView />} />
+          <Route path="/team" element={isAdmin ? <TeamView /> : <Navigate to="/upload" replace />} />
         </Route>
 
         <Route path="*" element={<Navigate to={isAuthenticated ? '/upload' : '/login'} replace />} />

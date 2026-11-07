@@ -4,6 +4,14 @@ import { Sidebar, type TabType } from "../components/Sidebar";
 import { Header } from "../components/Header";
 import type { AuthToken } from "../types/auth";
 
+const TAB_PATH: Record<TabType, string> = {
+    upload: '/upload',
+    traffic: '/upload-traffic',
+    sku: '/sku',
+    bundle: '/sku-bundling',
+    team: '/team',
+};
+
 interface MainPageProps {
     authToken: AuthToken;
     onAuthChange: (token: AuthToken | undefined) => void;
@@ -15,8 +23,13 @@ function MainPage({ authToken, onAuthChange }: MainPageProps) {
     const navigate = useNavigate();
 
     // The URL is now the source of truth for which tab is active, e.g.
-    // /upload, /sku, /team — instead of local component state.
-    const activeTab: TabType = location.pathname.startsWith('/sku')
+    // /upload, /sku, /sku-bundling, /team — instead of local component state.
+    // /sku-bundling and /upload-traffic are checked first: they also start with '/sku' / '/upload'.
+    const activeTab: TabType = location.pathname.startsWith('/upload-traffic')
+        ? 'traffic'
+        : location.pathname.startsWith('/sku-bundling')
+        ? 'bundle'
+        : location.pathname.startsWith('/sku')
         ? 'sku'
         : location.pathname.startsWith('/team')
             ? 'team'
@@ -34,7 +47,7 @@ function MainPage({ authToken, onAuthChange }: MainPageProps) {
             {/* Section 1: Left Menu Bar (20% width, collapsible) */}
             <Sidebar
                 activeTab={activeTab}
-                onSelectTab={(tab) => navigate(`/${tab}`)}
+                onSelectTab={(tab) => navigate(TAB_PATH[tab])}
                 isCollapsed={isCollapsed}
                 onToggleCollapse={handleToggleCollapse}
                 isAdmin={isAdmin}

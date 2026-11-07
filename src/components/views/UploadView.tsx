@@ -13,6 +13,7 @@ import {
 } from '@ant-design/icons'
 import { SkuSanitizeModal } from '../SkuSanitizeModal'
 import { ColumnSearchDropdown } from '../ColumnSearchDropdown'
+import { FileDropzone, SampleDownload } from '../FileDropzone'
 import useStore from '../../store/store'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
 import type { FilterValue, SorterResult } from 'antd/es/table/interface'
@@ -43,8 +44,6 @@ const MARKETPLACE_CHANNELS: Record<MarketplaceType, string> = {
   Blibli: 'blibli',
 }
 
-const ALLOWED_EXTENSIONS = ['xlsx', 'xls', 'csv']
-
 // How often the pipeline table refreshes while jobs are queued or processing
 const POLL_INTERVAL_MS = 10_000
 
@@ -63,8 +62,6 @@ export interface PipelineJob {
 export const UploadView: React.FC = () => {
   const { getProgressUpload, uploadFile, jobs, totalJobs } = useStore();
   const [authToken] = useLocalStorage('access_token');
-  // Resolving unmapped SKUs writes the SKU master, so only admins may do it
-  const isAdmin = ((authToken?.decoded_token?.roles ?? []) as string[]).includes('admin');
   const navigate = useNavigate()
   const [page, setPage] = useState(1);
       const [pageSize, setPageSize] = useState(5);
@@ -72,7 +69,6 @@ export const UploadView: React.FC = () => {
       const [sorter, setSorter] = useState<SorterResult<any> | null>(null);
   const [selectedMarketplace, setSelectedMarketplace] =
     useState<MarketplaceType>('Shopee')
-  const [isDragging, setIsDragging] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [selectedPausedJob, setSelectedPausedJob] = useState<PipelineJob | null>(
     null
@@ -98,44 +94,9 @@ export const UploadView: React.FC = () => {
       // { name: 'Custom / Other', code: '+', color: 'indigo' },
     ]
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }
-
-  const handleDragLeave = () => {
-    setIsDragging(false)
-  }
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-    const files = Array.from(e.dataTransfer.files)
-    if (files.length > 0 && !isUploading) {
-      queueFiles(files)
-    }
-  }
-
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      queueFiles(Array.from(e.target.files))
-    }
-    // Clear so selecting the same file again still fires onChange
-    e.target.value = ''
-  }
-
   const queueFiles = async (files: File[]) => {
     const channel = MARKETPLACE_CHANNELS[selectedMarketplace]
-    const accepted = files.filter((file) => {
-      const extension = file.name.split('.').pop()?.toLowerCase() ?? ''
-      if (!ALLOWED_EXTENSIONS.includes(extension)) {
-        message.error(`${file.name}: unsupported file type (.xlsx, .xls, .csv only)`)
-        return false
-      }
-      return true
-    })
-    if (accepted.length === 0) return
-
+    const accepted = files
     setIsUploading(true)
     let queued = 0
     // One at a time so the files enter the FIFO queue in the order selected
@@ -357,6 +318,7 @@ export const UploadView: React.FC = () => {
             : {};
 
     getProgressUpload(authToken.access_token, {
+      type: 'order',
       page,
             size: pageSize,
             filter: filterPayload,
@@ -397,8 +359,7 @@ export const UploadView: React.FC = () => {
                 Select Marketplace
               </h3>
               <p className="section-desc">
-                Choose the target marketplace before uploading raw transaction or inventory
-                manifests
+                Choose the marketplace whose order export you are uploading
               </p>
             </div>
             <span className="badge-active-mkt">
@@ -425,65 +386,20 @@ export const UploadView: React.FC = () => {
         </div>
 
         {/* Step 2: Upload Dropzone */}
-        <div
-          className={`dropzone-card ${isDragging ? 'dragging' : ''}`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          <input
-            type="file"
-            id="file-upload-input"
-            className="file-input-hidden"
-            multiple
-            accept=".xlsx,.xls,.csv"
-            disabled={isUploading}
-            onChange={handleFileInput}
-          />
-          <div className="dropzone-icon">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-              />
-            </svg>
-          </div>
-          <h3 className="dropzone-heading">
-            Upload <span className="highlight-text">{selectedMarketplace}</span> Transaction & SKU Data
-          </h3>
-          <p className="dropzone-sub">
+        <FileDropzone
+          heading={<>Upload <span className="highlight-text">{selectedMarketplace}</span> Order Data</>}
+          description={<>
             Files are automatically queued and processed in order. Supported
             formats: <strong>.XLSX</strong>, <strong>.XLS</strong>, <strong>.CSV</strong>
-          </p>
-
-          <div className="dropzone-actions">
-            <label
-              htmlFor="file-upload-input"
-              className="btn btn-primary cursor-pointer"
-              aria-disabled={isUploading}
-              style={isUploading ? { opacity: 0.6, pointerEvents: 'none' } : undefined}
-            >
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-              {isUploading ? 'Uploading...' : 'Select & Queue Files'}
-            </label>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => alert(`Sample template for ${selectedMarketplace} downloaded.`)}
-            >
-              Download {selectedMarketplace} Template
-            </button>
-          </div>
-        </div>
+          </>}
+          busy={isUploading}
+          onFiles={queueFiles}
+          actions={
+            <SampleDownload file={`order_${MARKETPLACE_CHANNELS[selectedMarketplace]}_sample.xlsx`}>
+              Download {MARKETPLACE_CHANNELS[selectedMarketplace] === 'tiktok_tokped' ? 'TikTok / Tokopedia' : selectedMarketplace} Sample
+            </SampleDownload>
+          }
+        />
 
         {/* Step 3: Ant Design Data Processing Pipeline Table */}
         <div className="card pipeline-card">
@@ -542,7 +458,6 @@ export const UploadView: React.FC = () => {
             key={selectedPausedJob.id}
             uploadId={selectedPausedJob.id}
             fileName={selectedPausedJob.fileName}
-            isAdmin={isAdmin}
             onClose={() => setSelectedPausedJob(null)}
             onChanged={fetchProgress}
           />
