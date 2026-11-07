@@ -16,6 +16,15 @@ export class UploadClientApi extends ApiClient {
         return data;
     }
 
+    // traffic exports are loaded by the svc right away (no queue)
+    async uploadTraffic(token: string, file: File, metadata: { channel: string }) {
+        const form = new FormData();
+        form.append('file', file);
+        form.append('data', JSON.stringify(metadata));
+        const { data } = await this.authorized(token).post('/traffic', form);
+        return data;
+    }
+
     async getUploadProgress(token: string, payload: any) {
         const { data } = await this.authorized(token).post('/progress', payload);
         return data;

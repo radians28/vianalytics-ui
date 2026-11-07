@@ -177,6 +177,50 @@
   text-overflow: ellipsis;
 }
 
+/* Master Data group: a toggle row and its indented sub-items */
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nav-group-toggle.has-active {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.nav-chevron {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.nav-chevron.open {
+  transform: rotate(90deg);
+}
+
+.nav-sub-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-left: 21px;
+  padding-left: 8px;
+  border-left: 1px solid #e2e8f0;
+}
+
+.nav-sub-list.collapsed {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: none;
+}
+
+.nav-item.nav-sub {
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
 .nav-badge {
   font-size: 11px;
   font-weight: 700;
@@ -1747,4 +1791,16 @@
   border-color: var(--primary);
   color: #ffffff;
   font-weight: 700;
+}
+/* SKU Bundling: sample download + upload above the table */
+.sku-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+/* sample downloads are links styled as buttons */
+a.btn {
+  text-decoration: none;
 }

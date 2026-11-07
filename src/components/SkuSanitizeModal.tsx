@@ -105,7 +105,6 @@ const SkuSearchSelect: React.FC<SkuSearchSelectProps> = ({ token, value, disable
 interface SkuSanitizeModalProps {
   uploadId: string
   fileName: string
-  isAdmin: boolean
   onClose: () => void
   onChanged: () => void   // the upload's status changed; refresh the pipeline table
 }
@@ -114,7 +113,6 @@ interface SkuSanitizeModalProps {
 export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
   uploadId,
   fileName,
-  isAdmin,
   onClose,
   onChanged,
 }) => {
@@ -173,12 +171,8 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
   const mappedCount = decisions.filter((d) => d.action === 'map').length
   const createCount = decisions.length - mappedCount
   const allDecided = pending.length > 0 && decisions.length === pending.length
-  const canApprove = isAdmin && allDecided && !submitting
-  const approveHint = !isAdmin
-    ? 'Only admins can resolve SKUs'
-    : allDecided
-      ? ''
-      : `${pending.length - decisions.length} SKU(s) still need a decision`
+  const canApprove = allDecided && !submitting
+  const approveHint = allDecided ? '' : `${pending.length - decisions.length} SKU(s) still need a decision`
 
   const setMode = (matchId: number, mode: Mode) => setModes((prev) => ({ ...prev, [matchId]: mode }))
 
@@ -333,7 +327,6 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
 
         <Radio.Group
           value={mode}
-          disabled={!isAdmin}
           onChange={(e) => setMode(item.matchId, e.target.value as Mode)}
           style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
         >
@@ -379,7 +372,6 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
               <SkuSearchSelect
                 key={item.matchId}
                 token={token}
-                disabled={!isAdmin}
                 value={otherSku[item.matchId]}
                 onChange={(sku) => {
                   setOtherSku((prev) => ({ ...prev, [item.matchId]: sku }))
@@ -398,7 +390,7 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
             <Radio value="create">Register as a new SKU</Radio>
             <Input
               style={{ marginTop: 8 }}
-              disabled={!isAdmin || mode !== 'create'}
+              disabled={mode !== 'create'}
               maxLength={300}
               placeholder="Product name of the new SKU"
               value={newNames[item.matchId] ?? item.productName ?? ''}
@@ -434,17 +426,14 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
               message="All SKUs of this upload are resolved, but the ETL has not resumed yet."
               description={review.upload.resumeError ?? undefined}
               action={
-                <Tooltip title={isAdmin ? '' : 'Only admins can resume the ETL'}>
-                  <Button
-                    type="primary"
-                    icon={<PlayCircleOutlined />}
-                    loading={submitting}
-                    disabled={!isAdmin}
-                    onClick={retryResume}
-                  >
-                    Resume ETL
-                  </Button>
-                </Tooltip>
+                <Button
+                  type="primary"
+                  icon={<PlayCircleOutlined />}
+                  loading={submitting}
+                  onClick={retryResume}
+                >
+                  Resume ETL
+                </Button>
               }
             />
             {resolvedItems.length > 0 && <div style={{ marginTop: 16 }}>{itemList}</div>}
@@ -455,14 +444,6 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
     }
     return (
       <>
-        {!isAdmin && (
-          <Alert
-            type="info"
-            showIcon
-            style={{ marginBottom: 12 }}
-            message="Only admins can resolve SKUs. You can review the suggestions."
-          />
-        )}
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 320px) 1fr', gap: 20 }}>
           {itemList}
           <div>{selected ? detail(selected) : <Empty description="Select an unmapped SKU" />}</div>

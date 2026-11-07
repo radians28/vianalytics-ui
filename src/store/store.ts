@@ -2,7 +2,8 @@ import { create } from "zustand";
 import { UserClientApi } from "./user-client";
 import { UploadClientApi } from "./upload-client";
 import { SkuClientApi } from "./sku-client";
-import type { SkuHistoryRow, SkuListPayload, SkuPlatformRow, SkuRow } from "../types/sku";
+import type { BundleUploadReport, SkuBundleRow, SkuHistoryRow, SkuListPayload, SkuPlatformRow, SkuRow } from "../types/sku";
+import type { TrafficUploadResult, UploadJob } from "../types/upload";
 import type { ResolveResult, ResumeResult, SkuDecision, SkuReview } from "../types/sku-review";
 
 // Built images set VITE_API_BASE_URL=/api (nginx proxies it to the svc);
@@ -37,6 +38,8 @@ export interface UserStore {
 
     getProgressUpload: (token: string, payload: any) => Promise<void>;
     uploadFile: (token: string, file: File, metadata: { channel: string }) => Promise<Record<string, unknown>>;
+    uploadTraffic: (token: string, file: File, metadata: { channel: string }) => Promise<TrafficUploadResult>;
+    getTrafficUploads: (token: string, payload: Record<string, unknown>) => Promise<{ records: UploadJob[]; total: number }>;
 
     setJobs: (jobs: any[] | ((prev: any[]) => any[])) => void;
 
@@ -44,6 +47,8 @@ export interface UserStore {
     getSkuHistory: (token: string, skuId: number) => Promise<SkuHistoryRow[]>;
     getSkuPlatforms: (token: string, skuId: number) => Promise<SkuPlatformRow[]>;
     searchSkus: (token: string, query: string) => Promise<SkuRow[]>;
+    getBundles: (token: string, payload: SkuListPayload) => Promise<void>;
+    uploadBundles: (token: string, file: File, mode: 'preview' | 'apply') => Promise<BundleUploadReport>;
 
     getSkuReview: (token: string, uploadId: string) => Promise<SkuReview>;
     resolveSkuReview: (token: string, uploadId: string, decisions: SkuDecision[]) => Promise<ResolveResult>;
@@ -51,6 +56,9 @@ export interface UserStore {
 
     skus: SkuRow[];
     totalSkus: number;
+
+    bundles: SkuBundleRow[];
+    totalBundles: number;
 
     members: any[];
     totalMembers: number;
@@ -68,6 +76,9 @@ const useStore = create<UserStore>((set, get) => ({
 
     skus: [],
     totalSkus: 0,
+
+    bundles: [],
+    totalBundles: 0,
 
     async login(userEmail: string, userPass: string) {
         try {
@@ -143,6 +154,18 @@ const useStore = create<UserStore>((set, get) => ({
         return data;
     },
 
+    // Neither swallows errors: the traffic page shows the svc's reason
+    async uploadTraffic(token, file, metadata) {
+        const { data } = await uploadClient.uploadTraffic(token, file, metadata);
+        return data;
+    },
+
+    // Traffic uploads are listed apart from the order queue, so they don't touch `jobs`
+    async getTrafficUploads(token, payload) {
+        const { data, meta: { total } } = await uploadClient.getUploadProgress(token, { ...payload, type: 'traffic' });
+        return { records: data, total };
+    },
+
     // Accepts an array or a React-style updater, e.g. setJobs(prev => [...])
     setJobs(jobs) {
         const next = typeof jobs === 'function' ? jobs(get().jobs) : jobs;
@@ -168,6 +191,16 @@ const useStore = create<UserStore>((set, get) => ({
 
     async searchSkus(token, query) {
         const { data } = await skuClient.searchSkus(token, query);
+        return data;
+    },
+
+    async getBundles(token, payload) {
+        const { data, meta: { total } } = await skuClient.getBundles(token, payload);
+        set({ bundles: data, totalBundles: total });
+    },
+
+    async uploadBundles(token, file, mode) {
+        const { data } = await skuClient.uploadBundles(token, file, mode);
         return data;
     },
 
