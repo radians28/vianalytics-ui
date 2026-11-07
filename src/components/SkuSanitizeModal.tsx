@@ -186,6 +186,17 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
     return <Tag color="blue">→ {code}</Tag>
   }
 
+  // other uploads waiting on the same listings: the decisions resolve them too
+  const sharedUploads = [...new Set(pending.flatMap((i) => i.otherUploads.map((u) => u.fileName)))]
+  const sharedTag = (item: SkuReviewItem) =>
+    item.otherUploads.length > 0 ? (
+      <Tooltip title={item.otherUploads.map((u) => `${u.fileName} (${u.status})`).join(', ')}>
+        <Tag color="gold" style={{ marginTop: 4, fontSize: 11 }}>
+          Also in {item.otherUploads.length} other upload{item.otherUploads.length === 1 ? '' : 's'}
+        </Tag>
+      </Tooltip>
+    ) : null
+
   const approve = async () => {
     setSubmitting(true)
     try {
@@ -193,6 +204,14 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
       onChanged()
       const created = result.created.length
       const summary = `${result.mapped} mapped, ${created} new SKU${created === 1 ? '' : 's'}`
+      const resumed = result.alsoResumed.filter((u) => u.triggered)
+      const notes = [
+        result.siblings.length
+          ? `${result.siblings.length} listing(s) with the same seller SKU in other uploads mapped as well`
+          : '',
+        resumed.length ? `also resumed: ${resumed.map((u) => u.fileName).join(', ')}` : '',
+      ].filter(Boolean)
+      if (notes.length) message.info(notes.join('; '), 6)
       if (result.resume.triggered) {
         message.success(`${summary}. ETL resumed.`)
         onClose()
@@ -267,6 +286,7 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
             }}
           >
             <div style={{ fontWeight: 600, fontSize: 13 }}>{item.productName ?? item.merchantSku}</div>
+            {sharedTag(item)}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
               <span className="font-mono text-xs" style={{ color: '#64748b' }}>
                 {item.sellerSku ?? 'no seller SKU'}
@@ -292,6 +312,7 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
                 <Tag color={item.status === 'MAPPED' ? 'blue' : 'green'}>
                   {item.status === 'MAPPED' ? 'Mapped' : 'New SKU'}
                 </Tag>
+                {item.resolved?.resolution === 'sibling' && <Tag color="purple">Same seller SKU</Tag>}
                 {item.resolved?.skuId} · {item.resolved?.by ?? '—'}
               </div>
             </div>
@@ -310,6 +331,15 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
             INCOMING LISTING · {item.channel.toUpperCase()}
           </div>
           <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>{item.productName ?? '—'}</div>
+          {item.otherUploads.length > 0 && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 8 }}
+              title={`This listing is also waiting in ${item.otherUploads.length} other upload(s)`}
+              description={`Your decision applies there too: ${item.otherUploads.map((u) => `${u.fileName} (${u.status})`).join(', ')}`}
+            />
+          )}
           <Descriptions
             size="small"
             column={2}
@@ -423,7 +453,9 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
             <Alert
               type="warning"
               showIcon
-              message="All SKUs of this upload are resolved, but the ETL has not resumed yet."
+              message={review.upload.resumeNeeded
+                ? 'The SKUs of this upload were resolved in another upload. Resume to load their order lines.'
+                : 'All SKUs of this upload are resolved, but the ETL has not resumed yet.'}
               description={review.upload.resumeError ?? undefined}
               action={
                 <Button
@@ -462,7 +494,10 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
         {pending.length > 0 && (
           <Popconfirm
             title="Approve and resume the ETL?"
-            description={`${mappedCount} mapped to existing SKUs, ${createCount} registered as new SKUs. The SKU master is updated.`}
+            description={
+              `${mappedCount} mapped to existing SKUs, ${createCount} registered as new SKUs. The SKU master is updated.` +
+              (sharedUploads.length ? ` Also applies to: ${sharedUploads.join(', ')}.` : '')
+            }
             okText="Approve"
             disabled={!canApprove}
             onConfirm={approve}

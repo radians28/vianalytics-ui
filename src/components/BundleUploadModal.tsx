@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Alert, Button, Collapse, Modal, Popconfirm, Spin, Statistic, Table, Tag, Tooltip, message } from 'antd'
+import { Alert, Button, Checkbox, Collapse, Modal, Popconfirm, Spin, Statistic, Table, Tag, Tooltip, message } from 'antd'
 import type { TableProps } from 'antd'
 import axios from 'axios'
 import { FileDropzone, SampleDownload } from './FileDropzone'
@@ -97,6 +97,14 @@ const itemColumns: TableProps<BundleUploadItem>['columns'] = [
     render: (_, item) => <Tag>{item.components.length}</Tag>,
   },
   {
+    title: 'Loaded Lines',
+    dataIndex: 'affectedLines',
+    key: 'affectedLines',
+    width: 110,
+    align: 'right',
+    render: (n: number) => (n ? n.toLocaleString('id-ID') : '—'),
+  },
+  {
     title: 'Action',
     dataIndex: 'replaces',
     key: 'replaces',
@@ -113,6 +121,8 @@ export const BundleUploadModal: React.FC<BundleUploadModalProps> = ({ onClose, o
   const [report, setReport] = useState<BundleUploadReport | null>(null)
   const [busy, setBusy] = useState<'preview' | 'apply' | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
+  // re-split order lines already loaded with these bundles (Airflow), off by default
+  const [reconsolidate, setReconsolidate] = useState(false)
 
   const runPreview = async (files: File[]) => {
     const picked = files[0]
@@ -133,9 +143,14 @@ export const BundleUploadModal: React.FC<BundleUploadModalProps> = ({ onClose, o
     if (!file) return
     setBusy('apply')
     try {
-      const result = await uploadBundles(authToken.access_token, file, 'apply')
+      const result = await uploadBundles(authToken.access_token, file, 'apply', reconsolidate)
       const created = result.created?.length ?? 0
       message.success(`${result.bundles} bundle(s) saved${created ? `, ${created} new SKU(s) registered` : ''}`)
+      if (result.reconsolidate?.triggered) {
+        message.info(`Re-splitting stored orders of ${result.reconsolidate.changeIds.length} bundle(s) in the background`)
+      } else if (result.reconsolidate) {
+        message.warning(`Bundles saved, but the order re-split could not start: ${result.reconsolidate.error ?? 'unknown error'}. Retry from "Re-split status".`, 8)
+      }
       onApplied()
       onClose()
     } catch (err) {
@@ -218,6 +233,19 @@ export const BundleUploadModal: React.FC<BundleUploadModalProps> = ({ onClose, o
               <Statistic title="New bundles" value={report.newBundles} />
               <Statistic title="New SKUs" value={report.newSkus.length} />
             </div>
+
+            {report.affectedLines > 0 && (
+              <Alert
+                type="info"
+                showIcon
+                title={`${report.affectedLines.toLocaleString('id-ID')} order line(s) already loaded use these bundles`}
+                description={
+                  <Checkbox checked={reconsolidate} onChange={(e) => setReconsolidate(e.target.checked)}>
+                    Re-split those orders with the new components (runs in the background; order totals stay the same)
+                  </Checkbox>
+                }
+              />
+            )}
 
             {errors.length > 0 ? (
               <Alert

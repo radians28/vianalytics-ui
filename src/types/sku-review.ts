@@ -21,12 +21,17 @@ export interface SkuReviewItem {
     firstOrderAt: string | null;
     lastOrderAt: string | null;
     candidates: SkuCandidate[];
+    // other uploads that hold the same listing; a decision here resolves it there too
+    otherUploads: { id: string; fileName: string; status: string }[];
     resolved: {
         id: number;
         skuId: string;
         productName: string;
         by: string | null;
         at: string | null;
+        // manual: decided by a reviewer · sibling: settled with a decision on the same seller SKU ·
+        // auto_created / auto_mapped: by the Airflow SKU step
+        resolution: 'manual' | 'sibling' | 'auto_created' | 'auto_mapped' | null;
     } | null;
 }
 
@@ -40,6 +45,7 @@ export interface SkuReviewUpload {
     createdAt: string | null;
     pending: number;
     resumeError: string | null;  // set when the decisions are saved but the ETL could not resume
+    resumeNeeded: boolean;       // resolved through another upload; its order lines still need loading
 }
 
 export interface SkuReview {
@@ -63,4 +69,8 @@ export interface ResolveResult {
     created: { matchId: number; id: number; skuId: string }[];
     resume: ResumeResult;
     uploadStatus: string;
+    // PENDING listings of other uploads with a seller SKU decided here, mapped to the same SKU
+    siblings: { matchId: number; sellerSku: string | null; skuId: string }[];
+    // other uploads holding a resolved listing; Paused ones left with nothing pending are resumed
+    alsoResumed: { uploadId: string; fileName: string; status: string; pending: number; triggered?: boolean; error?: string }[];
 }
