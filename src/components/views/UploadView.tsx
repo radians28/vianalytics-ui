@@ -14,6 +14,7 @@ import {
 import { SkuSanitizeModal } from '../SkuSanitizeModal'
 import { ColumnSearchDropdown } from '../ColumnSearchDropdown'
 import { FileDropzone, SampleDownload } from '../FileDropzone'
+import type { StagedReport } from '../FileDropzone'
 import useStore from '../../store/store'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
 import type { FilterValue, SorterResult } from 'antd/es/table/interface'
@@ -94,24 +95,29 @@ export const UploadView: React.FC = () => {
       // { name: 'Custom / Other', code: '+', color: 'indigo' },
     ]
 
-  const queueFiles = async (files: File[]) => {
+  // Each staged file is its own request, so each becomes its own queue entry (and Airflow run)
+  const queueFiles = async (files: File[], report: StagedReport) => {
     const channel = MARKETPLACE_CHANNELS[selectedMarketplace]
-    const accepted = files
     setIsUploading(true)
     let queued = 0
-    // One at a time so the files enter the FIFO queue in the order selected
-    for (const file of accepted) {
+    // One at a time so the files enter the FIFO queue in the order listed
+    for (const [index, file] of files.entries()) {
+      report(index, 'uploading')
       try {
         await uploadFile(authToken.access_token, file, { channel })
         queued += 1
+        report(index, 'done', 'Queued')
       } catch (err) {
-        message.error(`${file.name}: ${extractErrorMessage(err, 'Upload failed.')}`)
+        report(index, 'failed', extractErrorMessage(err, 'Upload failed.'))
       }
     }
     setIsUploading(false)
 
     if (queued > 0) {
       message.success(`${queued} file${queued > 1 ? 's' : ''} queued for processing.`)
+    }
+    if (queued < files.length) {
+      message.error(`${files.length - queued} file(s) could not be queued; retry them from the list.`)
     }
     fetchProgress()
   }
@@ -375,6 +381,7 @@ export const UploadView: React.FC = () => {
                   key={mkt.name}
                   type="button"
                   onClick={() => setSelectedMarketplace(mkt.name)}
+                  disabled={isUploading && !isSelected}
                   className={`mkt-button ${isSelected ? 'selected' : ''} mkt-${mkt.color}`}
                 >
                   <div className={`mkt-avatar avatar-${mkt.color}`}>{mkt.code}</div>
@@ -389,11 +396,14 @@ export const UploadView: React.FC = () => {
         <FileDropzone
           heading={<>Upload <span className="highlight-text">{selectedMarketplace}</span> Order Data</>}
           description={<>
-            Files are automatically queued and processed in order. Supported
-            formats: <strong>.XLSX</strong>, <strong>.XLS</strong>, <strong>.CSV</strong>
+            Add one or more export files of this marketplace; each file is queued as its own job and
+            processed in list order. Supported formats: <strong>.XLSX</strong>, <strong>.XLS</strong>, <strong>.CSV</strong>
           </>}
           busy={isUploading}
-          onFiles={queueFiles}
+          staged
+          onSubmit={queueFiles}
+          submitLabel="Queue"
+          resetKey={selectedMarketplace}
           actions={
             <SampleDownload file={`order_${MARKETPLACE_CHANNELS[selectedMarketplace]}_sample.xlsx`}>
               Download {MARKETPLACE_CHANNELS[selectedMarketplace] === 'tiktok_tokped' ? 'TikTok / Tokopedia' : selectedMarketplace} Sample
