@@ -57,7 +57,16 @@ export interface PipelineJob {
   recordsSummary: string
   status: ProcessingStatus
   statusDetail?: string
+  // listings decided through the SKU name match (new SKUs / mapped to an existing SKU)
+  skuSummary?: { created: number; mapped: number }
   timestamp: string
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+const skuSummaryText = (summary?: { created: number; mapped: number }) => {
+  if (!summary || (summary.created === 0 && summary.mapped === 0)) return 'No SKU changes'
+  return `${plural(summary.created, 'new SKU')} · ${plural(summary.mapped, 'mapped SKU')}`
 }
 
 export const UploadView: React.FC = () => {
@@ -288,14 +297,17 @@ export const UploadView: React.FC = () => {
         }
         if (record.status === 'Completed') {
           return (
-            <Button
-              type="link"
-              size="small"
-              onClick={() => navigate('/sku')}
-              style={{ padding: 0, fontWeight: 600 }}
-            >
-              View in SKU Master →
-            </Button>
+            <div className="resolution-cell">
+              <span className="resolution-summary">{skuSummaryText(record.skuSummary)}</span>
+              <Button
+                type="link"
+                size="small"
+                onClick={() => navigate('/sku')}
+                style={{ padding: 0, fontWeight: 600 }}
+              >
+                View in SKU Master →
+              </Button>
+            </div>
           )
         }
         if (record.status === 'Processing') {

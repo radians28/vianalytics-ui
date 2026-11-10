@@ -928,6 +928,21 @@
   cursor: pointer;
 }
 
+/* Pipeline table: SKU outcome of a completed upload above its link */
+.resolution-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.resolution-summary {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, var(--text-muted));
+  white-space: nowrap;
+}
+
 /* Staged files of a dropzone: one row per file with its upload state */
 .staged-files {
   margin-top: 20px;
