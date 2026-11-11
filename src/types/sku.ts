@@ -81,6 +81,7 @@ export interface BundleUploadItem {
     productName: string | null;
     skuId: number | null;
     replaces: boolean;          // the bundle already has components, which get replaced
+    affectedLines: number;      // order lines already loaded with this bundle
     components: BundleUploadComponent[];
 }
 
@@ -90,6 +91,7 @@ export interface BundleUploadReport {
     rows: number;
     replacedBundles: number;
     newBundles: number;
+    affectedLines: number;      // order lines already loaded with the file's bundles
     newSkus: { code: string; name: string; role: 'bundle' | 'component'; freeGift?: boolean }[];
     errors: { row: number | null; message: string }[];
     warnings: string[];
@@ -98,4 +100,27 @@ export interface BundleUploadReport {
     created?: { code: string; id: number; skuId: string; role: string }[];
     deletedRows?: number;
     insertedRows?: number;
+    changedBundles?: number;    // bundles whose component list changed (log_bundle_change rows)
+    reconsolidate?: { triggered: boolean; changeIds: number[]; error?: string } | null;
+}
+
+// GET /api/sku-master/bundles/changes: a bundle's component change and its order re-split state
+export interface BundleChange {
+    changeId: number;
+    runId: number;
+    id: number;
+    skuId: string;
+    sellerSku: string | null;
+    productName: string;
+    status: 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED' | 'SKIPPED';
+    newBundle: boolean;
+    components: number;
+    linesRebuilt: number | null;
+    linesMismatch: number | null;
+    ordersTouched: number | null;
+    message: string | null;
+    createdAt: string;
+    processedAt: string | null;
+    fileName: string | null;
+    by: string | null;
 }

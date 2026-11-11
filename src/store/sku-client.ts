@@ -18,11 +18,21 @@ export class SkuClientApi extends ApiClient {
     }
 
     // mode 'preview' validates only; 'apply' replaces the bundles in the file
-    async uploadBundles(token: string, file: File, mode: 'preview' | 'apply') {
+    async uploadBundles(token: string, file: File, mode: 'preview' | 'apply', reconsolidate = false) {
         const form = new FormData();
         form.append('file', file);
-        form.append('data', JSON.stringify({ mode }));
+        form.append('data', JSON.stringify({ mode, reconsolidate }));
         const { data } = await this.authorized(token).post('/bundles/upload', form);
+        return data;
+    }
+
+    async getBundleChanges(token: string, statuses: string[] = []) {
+        const { data } = await this.authorized(token).get('/bundles/changes', { params: { status: statuses.join(',') } });
+        return data;
+    }
+
+    async reconsolidateBundles(token: string, changeIds: number[] = []) {
+        const { data } = await this.authorized(token).post('/bundles/reconsolidate', { changeIds });
         return data;
     }
 

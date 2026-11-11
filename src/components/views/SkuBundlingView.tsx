@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from 'react'
-import { Button, ConfigProvider, Progress, Table, Tag, Tooltip, Typography, message } from 'antd'
+import { Badge, Button, ConfigProvider, Progress, Table, Tag, Tooltip, Typography, message } from 'antd'
 import type { TableColumnType, TableProps } from 'antd'
 import type { FilterValue, SorterResult } from 'antd/es/table/interface'
 import { SearchOutlined, UploadOutlined } from '@ant-design/icons'
 import { BundleUploadModal } from '../BundleUploadModal'
+import { BundleChangesDrawer } from '../BundleChangesDrawer'
 import { SampleDownload } from '../FileDropzone'
 import { ColumnSearchDropdown } from '../ColumnSearchDropdown'
 import useStore from '../../store/store'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
 import { extractErrorMessage } from '../../utils/api'
 import { formatIdr } from '../../utils/format'
-import type { SkuBundleComponent, SkuBundleRow, SkuListPayload } from '../../types/sku'
+import type { BundleChange, SkuBundleComponent, SkuBundleRow, SkuListPayload } from '../../types/sku'
 
 // m_sku_bundle.dq_flag values, explained for the tag tooltips
 const DQ_FLAGS: Record<string, { label: string; color: string; help: string }> = {
@@ -125,7 +126,7 @@ const ComponentTable: React.FC<{ bundle: SkuBundleRow }> = ({ bundle }) => {
 }
 
 export const SkuBundlingView: React.FC = () => {
-  const { getBundles, bundles, totalBundles } = useStore()
+  const { getBundles, bundles, totalBundles, getBundleChanges } = useStore()
   const [authToken] = useLocalStorage('access_token')
 
   const [page, setPage] = useState(1)
@@ -134,6 +135,13 @@ export const SkuBundlingView: React.FC = () => {
   const [sorter, setSorter] = useState<SorterResult<SkuBundleRow> | null>(null)
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([])
   const [uploadOpen, setUploadOpen] = useState(false)
+  // bundle component changes whose stored orders are not re-split yet
+  const [changes, setChanges] = useState<BundleChange[]>([])
+  const [changesTick, setChangesTick] = useState(0)
+  const [changesLoading, setChangesLoading] = useState(false)
+  const [changesOpen, setChangesOpen] = useState(false)
+  const openChanges = changes.filter((c) => c.status !== 'DONE')
+  const busyChanges = changes.some((c) => c.status === 'PENDING' || c.status === 'RUNNING')
   const [reloadTick, setReloadTick] = useState(0)
 
   const payload: SkuListPayload = {
@@ -151,6 +159,22 @@ export const SkuBundlingView: React.FC = () => {
   // The table shows a spinner until the response for the current request arrives
   const requestKey = JSON.stringify({ ...payload, reloadTick })
   const [loadedKey, setLoadedKey] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    getBundleChanges(authToken.access_token)
+      .then((rows) => { if (!cancelled) setChanges(rows) })
+      .catch(() => { /* the badge is optional; the table still works */ })
+      .finally(() => { if (!cancelled) setChangesLoading(false) })
+    return () => { cancelled = true }
+  }, [changesTick, authToken.access_token, getBundleChanges])
+
+  // follow a re-split while it runs
+  useEffect(() => {
+    if (!busyChanges) return
+    const timer = window.setInterval(() => setChangesTick((t) => t + 1), 10_000)
+    return () => window.clearInterval(timer)
+  }, [busyChanges])
 
   useEffect(() => {
     const { reloadTick: _tick, ...body } = JSON.parse(requestKey)
@@ -240,6 +264,13 @@ export const SkuBundlingView: React.FC = () => {
     >
       <div className="view-container sku-view">
         <div className="sku-toolbar">
+          {openChanges.length > 0 && (
+            <Badge count={openChanges.length} size="small">
+              <Button onClick={() => setChangesOpen(true)}>
+                Re-split status{busyChanges ? ' (running)' : ''}
+              </Button>
+            </Badge>
+          )}
           <SampleDownload file="sku_bundling_sample.xlsx">Download Sample</SampleDownload>
           <Button type="primary" icon={<UploadOutlined />} onClick={() => setUploadOpen(true)}>
             Upload Bundle File
@@ -283,12 +314,26 @@ export const SkuBundlingView: React.FC = () => {
           />
         </div>
 
+        {changesOpen && (
+          <BundleChangesDrawer
+            changes={changes}
+            loading={changesLoading}
+            onClose={() => setChangesOpen(false)}
+            onReload={() => {
+              setChangesLoading(true)
+              setChangesTick((t) => t + 1)
+              setReloadTick((t) => t + 1)
+            }}
+          />
+        )}
+
         {uploadOpen && (
           <BundleUploadModal
             onClose={() => setUploadOpen(false)}
             onApplied={() => {
               setExpandedKeys([])
               setReloadTick((t) => t + 1)
+              setChangesTick((t) => t + 1)
             }}
           />
         )}

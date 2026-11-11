@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { UserClientApi } from "./user-client";
 import { UploadClientApi } from "./upload-client";
 import { SkuClientApi } from "./sku-client";
-import type { BundleUploadReport, SkuBundleRow, SkuHistoryRow, SkuListPayload, SkuPlatformRow, SkuRow } from "../types/sku";
+import type { BundleChange, BundleUploadReport, SkuBundleRow, SkuHistoryRow, SkuListPayload, SkuPlatformRow, SkuRow } from "../types/sku";
 import type { TrafficUploadResult, UploadJob } from "../types/upload";
 import type { ResolveResult, ResumeResult, SkuDecision, SkuReview } from "../types/sku-review";
 
@@ -48,7 +48,9 @@ export interface UserStore {
     getSkuPlatforms: (token: string, skuId: number) => Promise<SkuPlatformRow[]>;
     searchSkus: (token: string, query: string) => Promise<SkuRow[]>;
     getBundles: (token: string, payload: SkuListPayload) => Promise<void>;
-    uploadBundles: (token: string, file: File, mode: 'preview' | 'apply') => Promise<BundleUploadReport>;
+    uploadBundles: (token: string, file: File, mode: 'preview' | 'apply', reconsolidate?: boolean) => Promise<BundleUploadReport>;
+    getBundleChanges: (token: string, statuses?: string[]) => Promise<BundleChange[]>;
+    reconsolidateBundles: (token: string, changeIds?: number[]) => Promise<{ triggered: boolean; changeIds: number[]; error?: string }>;
 
     getSkuReview: (token: string, uploadId: string) => Promise<SkuReview>;
     resolveSkuReview: (token: string, uploadId: string, decisions: SkuDecision[]) => Promise<ResolveResult>;
@@ -199,8 +201,18 @@ const useStore = create<UserStore>((set, get) => ({
         set({ bundles: data, totalBundles: total });
     },
 
-    async uploadBundles(token, file, mode) {
-        const { data } = await skuClient.uploadBundles(token, file, mode);
+    async uploadBundles(token, file, mode, reconsolidate = false) {
+        const { data } = await skuClient.uploadBundles(token, file, mode, reconsolidate);
+        return data;
+    },
+
+    async getBundleChanges(token, statuses = []) {
+        const { data } = await skuClient.getBundleChanges(token, statuses);
+        return data;
+    },
+
+    async reconsolidateBundles(token, changeIds = []) {
+        const { data } = await skuClient.reconsolidateBundles(token, changeIds);
         return data;
     },
 
