@@ -1947,3 +1947,63 @@
 a.btn {
   text-decoration: none;
 }
+
+/* SKU merge / split dialogs (MergeSkuModal, SplitSkuModal) and the SKU Master toolbar */
+.sku-view-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.sku-change-head {
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background-color: var(--border-subtle);
+}
+
+.sku-change-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.sku-change-section-title {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.sku-change-option {
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background-color: var(--bg-surface);
+}
+
+.sku-change-option + .sku-change-option {
+  margin-top: 6px;
+}
+
+.sku-change-option.selected {
+  border-color: var(--primary);
+  background-color: var(--primary-light);
+}
+
+.sku-change-option-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0 0 24px;
+}
+
+.sku-change-direction {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--text-primary);
+}

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import axios from 'axios'
 import {
   Alert,
@@ -9,7 +9,6 @@ import {
   Modal,
   Popconfirm,
   Radio,
-  Select,
   Spin,
   Tag,
   Tooltip,
@@ -21,6 +20,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage'
 import { extractErrorMessage } from '../utils/api'
 import { formatJakarta } from '../utils/date'
 import type { SkuRow } from '../types/sku'
+import { SkuSearchSelect } from './SkuSearchSelect'
 import type { SkuDecision, SkuRef, SkuReview, SkuReviewItem } from '../types/sku-review'
 
 // What the admin picked for a pending listing: a suggested SKU, another SKU
@@ -31,73 +31,6 @@ const scoreTag = (score: number | null) => {
   if (score === null) return null
   const color = score >= 0.85 ? 'green' : score >= 0.7 ? 'gold' : 'default'
   return <Tag color={color}>{Math.round(score * 100)}% name match</Tag>
-}
-
-// ------------------------------------------------------------------ SKU picker
-
-interface SkuSearchSelectProps {
-  token: string
-  value?: SkuRow
-  disabled?: boolean
-  onChange: (sku: SkuRow) => void
-}
-
-// Server-side search over SKU ID, latest and older seller SKUs and product name
-const SkuSearchSelect: React.FC<SkuSearchSelectProps> = ({ token, value, disabled, onChange }) => {
-  const { searchSkus } = useStore()
-  const [options, setOptions] = useState<SkuRow[]>(value ? [value] : [])
-  const [loading, setLoading] = useState(false)
-  const timer = useRef<number | undefined>(undefined)
-  const latestRequest = useRef(0)
-
-  const search = (query: string) => {
-    window.clearTimeout(timer.current)
-    timer.current = window.setTimeout(() => {
-      const request = ++latestRequest.current
-      setLoading(true)
-      searchSkus(token, query)
-        .then((rows) => {
-          if (request === latestRequest.current) setOptions(rows)
-        })
-        .catch((err) => message.error(extractErrorMessage(err, 'SKU search failed')))
-        .finally(() => {
-          if (request === latestRequest.current) setLoading(false)
-        })
-    }, 300)
-  }
-
-  useEffect(() => () => window.clearTimeout(timer.current), [])
-
-  return (
-    <Select<number>
-      style={{ width: '100%' }}
-      placeholder="Search SKU ID, seller SKU or product name"
-      disabled={disabled}
-      value={value?.id}
-      showSearch={{ filterOption: false, onSearch: search }}
-      onFocus={() => {
-        if (options.length <= 1) search('')
-      }}
-      notFoundContent={loading ? <Spin size="small" /> : 'No SKU found'}
-      onChange={(id) => {
-        const sku = options.find((o) => o.id === id)
-        if (sku) onChange(sku)
-      }}
-      options={options.map((o) => ({ value: o.id, label: `${o.skuId} · ${o.productName}` }))}
-      optionRender={(option) => {
-        const sku = options.find((o) => o.id === option.value)
-        if (!sku) return option.label
-        return (
-          <div>
-            <span className="font-mono font-semibold">{sku.skuId}</span> {sku.productName}
-            <div className="font-mono text-xs" style={{ color: '#64748b' }}>
-              Seller SKU: {sku.sellerSku ?? '—'}
-            </div>
-          </div>
-        )
-      }}
-    />
-  )
 }
 
 // ------------------------------------------------------------------ modal

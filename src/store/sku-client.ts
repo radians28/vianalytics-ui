@@ -50,4 +50,36 @@ export class SkuClientApi extends ApiClient {
         const { data } = await this.authorized(token).get(`/${skuId}/platforms`);
         return data;
     }
+
+    async getSkuComposition(token: string, skuId: number) {
+        const { data } = await this.authorized(token).get(`/${skuId}/composition`);
+        return data;
+    }
+
+    async getMergeSuggestions(token: string, skuId: number) {
+        const { data } = await this.authorized(token).get(`/${skuId}/merge-suggestions`);
+        return data;
+    }
+
+    // mode 'preview' validates and counts; 'apply' changes the master and starts moving the order lines
+    async mergeSku(token: string, skuId: number, targetSkuId: number, mode: 'preview' | 'apply') {
+        const { data } = await this.authorized(token).post(`/${skuId}/merge`, { targetSkuId, mode });
+        return data;
+    }
+
+    async splitSku(token: string, skuId: number, body: { codes: string[]; listingIds: number[]; target: unknown },
+                   mode: 'preview' | 'apply') {
+        const { data } = await this.authorized(token).post(`/${skuId}/split`, { ...body, mode });
+        return data;
+    }
+
+    async getSkuChanges(token: string, statuses: string[] = []) {
+        const { data } = await this.authorized(token).get('/changes', { params: { status: statuses.join(',') } });
+        return data;
+    }
+
+    async retrySkuChange(token: string, changeId: number) {
+        const { data } = await this.authorized(token).post(`/changes/${changeId}/retry`);
+        return data;
+    }
 }
