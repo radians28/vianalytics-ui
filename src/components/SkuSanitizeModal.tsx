@@ -21,7 +21,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage'
 import { extractErrorMessage } from '../utils/api'
 import { formatJakarta } from '../utils/date'
 import type { SkuRow } from '../types/sku'
-import type { SkuDecision, SkuReview, SkuReviewItem } from '../types/sku-review'
+import type { SkuDecision, SkuRef, SkuReview, SkuReviewItem } from '../types/sku-review'
 
 // What the admin picked for a pending listing: a suggested SKU, another SKU
 // found by search, or a new SKU
@@ -154,6 +154,9 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
   const selected = pending.find((i) => i.matchId === selectedId) ?? null
 
   const decisionOf = (item: SkuReviewItem): SkuDecision | null => {
+    // the seller SKU already belongs to an SKU: the order load resolves its lines by seller SKU,
+    // so that SKU is the only valid decision
+    if (item.sellerSkuOwner) return { matchId: item.matchId, action: 'map', skuId: item.sellerSkuOwner.id }
     const mode = modes[item.matchId]
     if (!mode) return null
     if (mode === 'create') {
@@ -180,7 +183,9 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
     const decision = decisionOf(item)
     if (!decision) return <Tag>Pending</Tag>
     if (decision.action === 'create') return <Tag color="green">New SKU</Tag>
-    const code = modes[item.matchId] === 'other'
+    const code = item.sellerSkuOwner
+      ? item.sellerSkuOwner.skuId
+      : modes[item.matchId] === 'other'
       ? otherSku[item.matchId]?.skuId
       : item.candidates.find((c) => c.id === decision.skuId)?.skuId
     return <Tag color="blue">→ {code}</Tag>
@@ -351,10 +356,24 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
               { key: 'lines', label: 'Order lines', children: item.orderLineCount ?? '—' },
               { key: 'first', label: 'First order', children: formatJakarta(item.firstOrderAt) },
               { key: 'last', label: 'Last order', children: formatJakarta(item.lastOrderAt) },
+              ...(item.listingSku
+                ? [{
+                    key: 'listing',
+                    label: 'Listing now on',
+                    span: 2,
+                    children: (
+                      <span>
+                        <span className="font-mono font-semibold">{item.listingSku.skuId}</span>{' '}
+                        {item.listingSku.productName}
+                      </span>
+                    ),
+                  }]
+                : []),
             ]}
           />
         </div>
 
+        {item.sellerSkuOwner ? ownerDecision(item, item.sellerSkuOwner) : (
         <Radio.Group
           value={mode}
           onChange={(e) => setMode(item.matchId, e.target.value as Mode)}
@@ -428,9 +447,38 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
             />
           </div>
         </Radio.Group>
+        )}
       </div>
     )
   }
+
+  // Seller SKU already registered: the decision is fixed to its SKU
+  const ownerDecision = (item: SkuReviewItem, owner: SkuRef) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <Alert
+        type="info"
+        showIcon
+        title={`Seller SKU ${item.sellerSku ?? item.skuCode} is already registered on ${owner.skuId}`}
+        description={
+          'It was added to the SKU master after this listing was queued, so the listing is mapped to ' +
+          `${owner.skuId}. A new SKU cannot reuse this seller SKU.` +
+          (item.listingSku && item.listingSku.id !== owner.id
+            ? ` The listing stays on ${item.listingSku.skuId}; the mismatch is logged as a data quality issue.`
+            : '')
+        }
+      />
+      <div style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #a5b4fc' }}>
+        <Radio checked>
+          <span className="sku-id-badge font-mono font-semibold">{owner.skuId}</span>{' '}
+          <span style={{ fontWeight: 600 }}>{owner.productName}</span>{' '}
+          <Tag color="blue">Owns this seller SKU</Tag>
+          <div className="font-mono text-xs" style={{ color: '#64748b', marginTop: 2 }}>
+            Master seller SKU: {owner.sellerSku ?? '—'}
+          </div>
+        </Radio>
+      </div>
+    </div>
+  )
 
   const renderBody = () => {
     if (loadError) {

@@ -8,6 +8,14 @@ export interface SkuCandidate {
     score: number | null;      // name similarity 0..1
 }
 
+// An SKU as it is now (seller SKU owner or the listing's current SKU)
+export interface SkuRef {
+    id: number;                // numeric sku_id, sent back as skuId when mapping
+    skuId: string;             // SKU master code
+    sellerSku: string | null;  // master seller SKU of that SKU
+    productName: string;
+}
+
 export interface SkuReviewItem {
     matchId: number;
     status: 'PENDING' | 'MAPPED' | 'CREATED_NEW';
@@ -21,6 +29,11 @@ export interface SkuReviewItem {
     firstOrderAt: string | null;
     lastOrderAt: string | null;
     candidates: SkuCandidate[];
+    // SKU that already owns this seller SKU (set after the listing was logged): the listing can
+    // only be mapped to it, never registered as a new SKU
+    sellerSkuOwner: SkuRef | null;
+    // SKU the listing is linked to now, under another seller SKU
+    listingSku: SkuRef | null;
     // other uploads that hold the same listing; a decision here resolves it there too
     otherUploads: { id: string; fileName: string; status: string }[];
     resolved: {
