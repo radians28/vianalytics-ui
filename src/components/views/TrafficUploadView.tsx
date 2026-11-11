@@ -5,6 +5,7 @@ import type { FilterValue, SorterResult } from 'antd/es/table/interface'
 import { CheckCircleOutlined, CloseCircleOutlined, SearchOutlined } from '@ant-design/icons'
 import { ColumnSearchDropdown } from '../ColumnSearchDropdown'
 import { FileDropzone, SampleDownload } from '../FileDropzone'
+import type { StagedReport } from '../FileDropzone'
 import useStore from '../../store/store'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
 import { extractErrorMessage } from '../../utils/api'
@@ -72,16 +73,20 @@ export const TrafficUploadView: React.FC = () => {
       .finally(() => setLoadedKey(requestKey))
   }, [requestKey, authToken.access_token, getTrafficUploads])
 
-  const handleFiles = async (files: File[]) => {
+  const handleFiles = async (files: File[], report: StagedReport) => {
     setIsUploading(true)
     const done: FileResult[] = []
-    // One at a time: overlapping exports of the same marketplace then resolve in the order selected
-    for (const file of files) {
+    // One at a time: overlapping exports of the same marketplace then resolve in the order listed
+    for (const [index, file] of files.entries()) {
+      report(index, 'uploading')
       try {
         const result = await uploadTraffic(authToken.access_token, file, { channel: marketplace.channel })
         done.push({ fileName: file.name, marketplace: selected, result })
+        report(index, 'done', `${result.days} day${result.days === 1 ? '' : 's'} loaded`)
       } catch (err) {
-        done.push({ fileName: file.name, marketplace: selected, error: extractErrorMessage(err, 'Upload failed.') })
+        const error = extractErrorMessage(err, 'Upload failed.')
+        done.push({ fileName: file.name, marketplace: selected, error })
+        report(index, 'failed', error)
       }
     }
     setIsUploading(false)
@@ -182,6 +187,7 @@ export const TrafficUploadView: React.FC = () => {
                 key={mkt.name}
                 type="button"
                 onClick={() => setSelected(mkt.name)}
+                disabled={isUploading && selected !== mkt.name}
                 className={`mkt-button ${selected === mkt.name ? 'selected' : ''} mkt-${mkt.color}`}
               >
                 <div className={`mkt-avatar avatar-${mkt.color}`}>{mkt.code}</div>
@@ -201,8 +207,10 @@ export const TrafficUploadView: React.FC = () => {
           </>}
           busy={isUploading}
           busyLabel="Loading..."
-          buttonLabel="Select & Load Files"
-          onFiles={handleFiles}
+          staged
+          onSubmit={handleFiles}
+          submitLabel="Load"
+          resetKey={selected}
           actions={
             <SampleDownload file={`traffic_${marketplace.channel}_sample.xlsx`}>
               Download {selected} Sample
