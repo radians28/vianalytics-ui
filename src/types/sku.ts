@@ -124,3 +124,66 @@ export interface BundleChange {
     fileName: string | null;
     by: string | null;
 }
+
+// ------------------------------------------------------------------ merge / split (svc sku_change.py)
+
+// GET /api/sku-master/<id>/composition: what a split can move, with the order lines that follow each
+export interface SkuComposition {
+    sku: SkuRow;
+    codes: { code: string; isMasterCode: boolean; firstSeenAt: string | null; orderLines: number }[];
+    listings: {
+        platformSkuId: number;
+        channel: string;
+        merchantSku: string;
+        productName: string | null;
+        currentSellerSku: string | null;
+        orderLines: number;
+    }[];
+    bundleComponents: number;
+    merging: boolean;
+}
+
+// GET /api/sku-master/<id>/merge-suggestions: SKUs most like this one (same scoring as the SKU review)
+export interface MergeSuggestion extends SkuRow {
+    matchedName: string;
+    score: number;
+    cosine: number | null;
+    factors: Record<'species' | 'stage' | 'size' | 'qty', number>;
+}
+
+// POST /api/sku-master/<id>/merge | split (mode preview or apply)
+export interface SkuChangeResult {
+    kind: 'MERGE' | 'SPLIT';
+    source: SkuRow;
+    target: { id: number | null; skuId: string; sellerSku: string | null; productName: string };
+    deletes?: string;
+    counts: {
+        codes: number;
+        listings: number;
+        historyRows: number;
+        orderLines: number;
+        componentOfBundles?: number;
+        bundle: string | null;
+    };
+    changeId?: number;
+    reassign?: { triggered: boolean; dagId: string; error?: string };
+}
+
+export type SplitTarget = { skuId: number } | { new: { productName: string } };
+
+// GET /api/sku-master/changes
+export interface SkuChange {
+    changeId: number;
+    kind: 'MERGE' | 'SPLIT';
+    source: string;
+    target: string;
+    targetCreated: boolean;
+    codes: number;
+    listings: number;
+    status: 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED';
+    counts: Record<string, number> | null;
+    message: string | null;
+    by: string | null;
+    createdAt: string;
+    finishedAt: string | null;
+}

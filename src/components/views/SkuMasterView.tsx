@@ -2,22 +2,41 @@ import React, { useEffect, useState } from 'react'
 import { Button, ConfigProvider, Dropdown, Table, message } from 'antd'
 import type { MenuProps, TableColumnType, TableProps } from 'antd'
 import type { FilterValue, SorterResult } from 'antd/es/table/interface'
-import { EyeOutlined, MoreOutlined, SearchOutlined } from '@ant-design/icons'
+import { EyeOutlined, HistoryOutlined, MergeCellsOutlined, MoreOutlined, SearchOutlined } from '@ant-design/icons'
 import { ColumnSearchDropdown } from '../ColumnSearchDropdown'
 import { SkuDetailModal } from '../SkuDetailModal'
+import { MergeSkuModal } from '../MergeSkuModal'
+import { SkuChangesDrawer } from '../SkuChangesDrawer'
 import useStore from '../../store/store'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
 import { extractErrorMessage } from '../../utils/api'
-import type { SkuListPayload, SkuRow } from '../../types/sku'
+import type { SkuChange, SkuListPayload, SkuRow } from '../../types/sku'
 
-// Row actions; add more entries here and handle them in handleAction
-const ACTION_ITEMS: MenuProps['items'] = [
+// Row actions; add more entries here and handle them in handleAction. Merge is admin only.
+const actionItems = (isAdmin: boolean): MenuProps['items'] => [
   { key: 'detail', label: 'Show detail', icon: <EyeOutlined /> },
+  ...(isAdmin ? [{ key: 'merge', label: 'Merge', icon: <MergeCellsOutlined /> }] : []),
 ]
 
 export const SkuMasterView: React.FC = () => {
-  const { getSkus, skus, totalSkus } = useStore()
+  const { getSkus, getSkuChanges, skus, totalSkus } = useStore()
   const [authToken] = useLocalStorage('access_token')
+  const isAdmin = ((authToken?.decoded_token?.roles ?? []) as string[]).includes('admin')
+  const [mergeSku, setMergeSku] = useState<SkuRow | null>(null)
+  const [reloadTick, setReloadTick] = useState(0)
+  const [changes, setChanges] = useState<{ open: boolean; loading: boolean; rows: SkuChange[] }>({
+    open: false, loading: false, rows: [],
+  })
+
+  const loadChanges = () => {
+    setChanges((c) => ({ ...c, open: true, loading: true }))
+    getSkuChanges(authToken.access_token)
+      .then((rows) => setChanges({ open: true, loading: false, rows }))
+      .catch((err) => {
+        message.error(extractErrorMessage(err, 'Failed to load SKU changes'))
+        setChanges((c) => ({ ...c, loading: false }))
+      })
+  }
 
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -38,17 +57,20 @@ export const SkuMasterView: React.FC = () => {
       : {},
   }
   // The table shows a spinner until the response for the current request arrives
-  const requestKey = JSON.stringify(payload)
+  const requestKey = JSON.stringify({ ...payload, reloadTick })
   const [loadedKey, setLoadedKey] = useState<string | null>(null)
 
   useEffect(() => {
-    getSkus(authToken.access_token, JSON.parse(requestKey))
+    const { reloadTick: _tick, ...body } = JSON.parse(requestKey)
+    void _tick
+    getSkus(authToken.access_token, body)
       .catch((err) => message.error(extractErrorMessage(err, 'Failed to load SKU master')))
       .finally(() => setLoadedKey(requestKey))
   }, [requestKey, authToken.access_token, getSkus])
 
   const handleAction = (key: string, record: SkuRow) => {
     if (key === 'detail') setDetailSku(record)
+    if (key === 'merge') setMergeSku(record)
   }
 
   const getColumnSearchProps = (label: string): TableColumnType<SkuRow> => ({
@@ -104,7 +126,7 @@ export const SkuMasterView: React.FC = () => {
       render: (_, record) => (
         <Dropdown
           trigger={['click']}
-          menu={{ items: ACTION_ITEMS, onClick: ({ key }) => handleAction(key, record) }}
+          menu={{ items: actionItems(isAdmin), onClick: ({ key }) => handleAction(key, record) }}
         >
           <Button type="text" icon={<MoreOutlined />} aria-label="Row actions" />
         </Dropdown>
@@ -122,6 +144,9 @@ export const SkuMasterView: React.FC = () => {
       }}
     >
       <div className="view-container sku-view">
+        <div className="sku-view-toolbar">
+          <Button icon={<HistoryOutlined />} onClick={loadChanges}>Merge &amp; split log</Button>
+        </div>
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <Table<SkuRow>
             rowKey="id"
@@ -158,6 +183,26 @@ export const SkuMasterView: React.FC = () => {
             key={detailSku.id}
             sku={detailSku}
             onClose={() => setDetailSku(null)}
+            onChanged={() => setReloadTick((t) => t + 1)}
+          />
+        )}
+
+        {mergeSku && (
+          <MergeSkuModal
+            key={mergeSku.id}
+            sku={mergeSku}
+            onClose={() => setMergeSku(null)}
+            onMerged={() => setReloadTick((t) => t + 1)}
+          />
+        )}
+
+        {changes.open && (
+          <SkuChangesDrawer
+            changes={changes.rows}
+            loading={changes.loading}
+            isAdmin={isAdmin}
+            onClose={() => setChanges((c) => ({ ...c, open: false }))}
+            onReload={loadChanges}
           />
         )}
       </div>

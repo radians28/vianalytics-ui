@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react'
-import { Alert, Modal, Table, Tabs, Tag } from 'antd'
+import { Alert, Button, Modal, Table, Tabs, Tag } from 'antd'
 import type { TableProps } from 'antd'
-import { ArrowRightOutlined } from '@ant-design/icons'
+import { ArrowRightOutlined, ScissorOutlined } from '@ant-design/icons'
 import useStore from '../store/store'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { extractErrorMessage } from '../utils/api'
 import { formatJakarta } from '../utils/date'
 import type { SkuHistoryRow, SkuPlatformRow, SkuRow } from '../types/sku'
+import { SplitSkuModal } from './SplitSkuModal'
 
 // data/error stay undefined while the request is in flight
 interface Loadable<T> {
@@ -19,13 +20,17 @@ type TabKey = 'history' | 'platforms'
 interface SkuDetailModalProps {
   sku: SkuRow
   onClose: () => void
+  onChanged?: () => void      // a split changed the SKU master; refresh the SKU list
 }
 
 // Render with key={sku.id} so each SKU starts with fresh state.
-export const SkuDetailModal: React.FC<SkuDetailModalProps> = ({ sku, onClose }) => {
+export const SkuDetailModal: React.FC<SkuDetailModalProps> = ({ sku, onClose, onChanged }) => {
   const { getSkuHistory, getSkuPlatforms } = useStore()
   const [authToken] = useLocalStorage('access_token')
   const token: string = authToken.access_token
+  const isAdmin = ((authToken?.decoded_token?.roles ?? []) as string[]).includes('admin')
+  const [splitRow, setSplitRow] = useState<SkuHistoryRow | null>(null)
+  const [reloadTick, setReloadTick] = useState(0)
 
   // The history tab opens first, so it is requested right away; the platform
   // tab is requested the first time it is opened (null = not requested yet).
@@ -36,7 +41,7 @@ export const SkuDetailModal: React.FC<SkuDetailModalProps> = ({ sku, onClose }) 
     getSkuHistory(token, sku.id)
       .then((data) => setHistory({ data }))
       .catch((err) => setHistory({ error: extractErrorMessage(err, 'Failed to load SKU history') }))
-  }, [getSkuHistory, token, sku.id])
+  }, [getSkuHistory, token, sku.id, reloadTick])
 
   const loadPlatforms = () => {
     setPlatforms({})
@@ -102,6 +107,19 @@ export const SkuDetailModal: React.FC<SkuDetailModalProps> = ({ sku, onClose }) 
         </>
       ),
     },
+    ...(isAdmin
+      ? [{
+          title: '',
+          key: 'split',
+          width: 90,
+          align: 'right' as const,
+          fixed: 'right' as const,
+          // a version under another SKU belongs there; split it from that SKU
+          render: (_: unknown, row: SkuHistoryRow) => (!row.skuId || row.skuId === sku.skuId) && (
+            <Button size="small" icon={<ScissorOutlined />} onClick={() => setSplitRow(row)}>Split</Button>
+          ),
+        }]
+      : []),
   ]
 
   const platformColumns: TableProps<SkuPlatformRow>['columns'] = [
@@ -214,6 +232,21 @@ export const SkuDetailModal: React.FC<SkuDetailModalProps> = ({ sku, onClose }) 
           },
         ]}
       />
+      {splitRow && (
+        <SplitSkuModal
+          key={`${splitRow.platformSkuId}-${splitRow.version}`}
+          sku={sku}
+          row={splitRow}
+          history={history.data ?? []}
+          onClose={() => setSplitRow(null)}
+          onSplit={() => {
+            setHistory({})
+            setReloadTick((t) => t + 1)
+            setPlatforms(null)
+            onChanged?.()
+          }}
+        />
+      )}
     </Modal>
   )
 }

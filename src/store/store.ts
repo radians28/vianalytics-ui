@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { UserClientApi } from "./user-client";
 import { UploadClientApi } from "./upload-client";
 import { SkuClientApi } from "./sku-client";
-import type { BundleChange, BundleUploadReport, SkuBundleRow, SkuHistoryRow, SkuListPayload, SkuPlatformRow, SkuRow } from "../types/sku";
+import type { BundleChange, BundleUploadReport, MergeSuggestion, SkuBundleRow, SkuChange, SkuChangeResult, SkuComposition, SkuHistoryRow, SkuListPayload, SkuPlatformRow, SkuRow, SplitTarget } from "../types/sku";
 import type { TrafficUploadResult, UploadJob } from "../types/upload";
 import type { ResolveResult, ResumeResult, SkuDecision, SkuReview } from "../types/sku-review";
 
@@ -46,6 +46,13 @@ export interface UserStore {
     getSkus: (token: string, payload: SkuListPayload) => Promise<void>;
     getSkuHistory: (token: string, skuId: number) => Promise<SkuHistoryRow[]>;
     getSkuPlatforms: (token: string, skuId: number) => Promise<SkuPlatformRow[]>;
+    getSkuComposition: (token: string, skuId: number) => Promise<SkuComposition>;
+    getMergeSuggestions: (token: string, skuId: number) => Promise<MergeSuggestion[]>;
+    mergeSku: (token: string, skuId: number, targetSkuId: number, mode: 'preview' | 'apply') => Promise<SkuChangeResult>;
+    splitSku: (token: string, skuId: number, body: { codes: string[]; listingIds: number[]; target: SplitTarget },
+               mode: 'preview' | 'apply') => Promise<SkuChangeResult>;
+    getSkuChanges: (token: string, statuses?: string[]) => Promise<SkuChange[]>;
+    retrySkuChange: (token: string, changeId: number) => Promise<{ triggered: boolean; error?: string }>;
     searchSkus: (token: string, query: string) => Promise<SkuRow[]>;
     getBundles: (token: string, payload: SkuListPayload) => Promise<void>;
     uploadBundles: (token: string, file: File, mode: 'preview' | 'apply', reconsolidate?: boolean) => Promise<BundleUploadReport>;
@@ -183,6 +190,37 @@ const useStore = create<UserStore>((set, get) => ({
 
     async getSkuHistory(token, skuId) {
         const { data } = await skuClient.getSkuHistory(token, skuId);
+        return data;
+    },
+
+    // Merge / split: errors are not swallowed, the dialogs show the svc's reason
+    async getSkuComposition(token, skuId) {
+        const { data } = await skuClient.getSkuComposition(token, skuId);
+        return data;
+    },
+
+    async getMergeSuggestions(token, skuId) {
+        const { data } = await skuClient.getMergeSuggestions(token, skuId);
+        return data;
+    },
+
+    async mergeSku(token, skuId, targetSkuId, mode) {
+        const { data } = await skuClient.mergeSku(token, skuId, targetSkuId, mode);
+        return data;
+    },
+
+    async splitSku(token, skuId, body, mode) {
+        const { data } = await skuClient.splitSku(token, skuId, body, mode);
+        return data;
+    },
+
+    async getSkuChanges(token, statuses = []) {
+        const { data } = await skuClient.getSkuChanges(token, statuses);
+        return data;
+    },
+
+    async retrySkuChange(token, changeId) {
+        const { data } = await skuClient.retrySkuChange(token, changeId);
         return data;
     },
 
