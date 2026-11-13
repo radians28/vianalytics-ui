@@ -218,8 +218,8 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
               textAlign: 'left',
               padding: '8px 10px',
               borderRadius: 8,
-              border: `1px solid ${active ? '#a5b4fc' : '#e5e7eb'}`,
-              background: active ? '#eef2ff' : '#fff',
+              border: `1px solid ${active ? '#f8c2c8' : '#e5e7eb'}`,
+              background: active ? '#fdecee' : '#fff',
               cursor: 'pointer',
             }}
           >
@@ -324,7 +324,7 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
               style={{
                 padding: '8px 10px',
                 borderRadius: 8,
-                border: `1px solid ${mode === `cand:${candidate.id}` ? '#a5b4fc' : '#e5e7eb'}`,
+                border: `1px solid ${mode === `cand:${candidate.id}` ? '#f8c2c8' : '#e5e7eb'}`,
               }}
             >
               <Radio value={`cand:${candidate.id}`}>
@@ -346,7 +346,7 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
             style={{
               padding: '8px 10px',
               borderRadius: 8,
-              border: `1px solid ${mode === 'other' ? '#a5b4fc' : '#e5e7eb'}`,
+              border: `1px solid ${mode === 'other' ? '#f8c2c8' : '#e5e7eb'}`,
             }}
           >
             <Radio value="other">Map to another SKU</Radio>
@@ -400,7 +400,7 @@ export const SkuSanitizeModal: React.FC<SkuSanitizeModalProps> = ({
             : '')
         }
       />
-      <div style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #a5b4fc' }}>
+      <div style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #f8c2c8' }}>
         <Radio checked>
           <span className="sku-id-badge font-mono font-semibold">{owner.skuId}</span>{' '}
           <span style={{ fontWeight: 600 }}>{owner.productName}</span>{' '}

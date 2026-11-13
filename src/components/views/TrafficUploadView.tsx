@@ -11,6 +11,7 @@ import { useLocalStorage } from '../../hooks/useLocalStorage'
 import { extractErrorMessage } from '../../utils/api'
 import { formatJakarta } from '../../utils/date'
 import type { TrafficUploadResult, UploadJob } from '../../types/upload'
+import { BRAND_PRIMARY } from '../../theme'
 
 type TrafficMarketplace = 'Shopee' | 'Tokopedia' | 'Lazada' | 'TikTok Shop' | 'Blibli'
 
@@ -111,7 +112,7 @@ export const TrafficUploadView: React.FC = () => {
       sortOrder: sorter?.columnKey === 'fileName' ? sorter.order : null,
       filteredValue: filters.fileName ?? null,
       filterDropdown: (props) => <ColumnSearchDropdown {...props} label="file name" />,
-      filterIcon: (filtered: boolean) => <SearchOutlined style={{ color: filtered ? '#4f46e5' : undefined }} />,
+      filterIcon: (filtered: boolean) => <SearchOutlined style={{ color: filtered ? BRAND_PRIMARY : undefined }} />,
       render: (name: string) => <span className="job-filename">{name}</span>,
     },
     {
@@ -163,7 +164,7 @@ export const TrafficUploadView: React.FC = () => {
   ]
 
   return (
-    <ConfigProvider theme={{ token: { colorPrimary: '#4f46e5', borderRadius: 8 } }}>
+    <ConfigProvider theme={{ token: { colorPrimary: BRAND_PRIMARY, borderRadius: 8 } }}>
       <div className="view-container upload-view">
         {/* Step 1: marketplace */}
         <div className="card marketplace-card">

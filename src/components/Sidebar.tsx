@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Brand } from './Brand'
 
 export type TabType = 'upload' | 'traffic' | 'sku' | 'bundle' | 'team'
 
@@ -93,22 +94,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Brand Header */}
       <div className="sidebar-header">
         <div className="brand-wrapper">
-          {!isCollapsed && <div className="brand-logo" title="Vianalytics">
-            <svg
-              className="icon-logo"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2.5}
-                d="M13 10V3L4 14h7v7l9-11h-7z"
-              />
-            </svg>
-          </div>}
-          {!isCollapsed && <span className="brand-title">Vianalytics</span>}
+          {!isCollapsed && <Brand />}
         </div>
 
         <button

@@ -11,6 +11,7 @@ import useStore from '../../store/store'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
 import { extractErrorMessage } from '../../utils/api'
 import type { SkuChange, SkuListPayload, SkuRow } from '../../types/sku'
+import { BRAND_PRIMARY } from '../../theme'
 
 // Row actions; add more entries here and handle them in handleAction. Merge is admin only.
 const actionItems = (isAdmin: boolean): MenuProps['items'] => [
@@ -76,7 +77,7 @@ export const SkuMasterView: React.FC = () => {
   const getColumnSearchProps = (label: string): TableColumnType<SkuRow> => ({
     filterDropdown: (props) => <ColumnSearchDropdown {...props} label={label} />,
     filterIcon: (filtered: boolean) => (
-      <SearchOutlined style={{ color: filtered ? '#4f46e5' : undefined }} />
+      <SearchOutlined style={{ color: filtered ? BRAND_PRIMARY : undefined }} />
     ),
   })
 
@@ -138,7 +139,7 @@ export const SkuMasterView: React.FC = () => {
     <ConfigProvider
       theme={{
         token: {
-          colorPrimary: '#4f46e5',
+          colorPrimary: BRAND_PRIMARY,
           borderRadius: 8,
         },
       }}

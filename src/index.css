@@ -10,10 +10,14 @@
   --border-subtle: #f1f5f9;
 
   /* Brand / Primary */
-  --primary: #4f46e5;
-  --primary-hover: #4338ca;
-  --primary-light: #eef2ff;
-  --primary-text: #3730a3;
+  /* Royal Canin red */
+  --primary: #e2001a;
+  --primary-hover: #b80016;
+  --primary-light: #fdecee;
+  --primary-text: #9e0012;
+  --primary-soft: #fbd9dd;
+  --primary-border: #f8c2c8;
+  --primary-ring: rgba(226, 0, 26, 0.12);
 
   /* Text colors */
   --text-primary: #0f172a;

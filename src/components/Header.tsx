@@ -5,6 +5,7 @@ import { DownOutlined, LogoutOutlined, SettingOutlined } from '@ant-design/icons
 import type { TabType } from './Sidebar'
 import type { AuthToken } from '../types/auth'
 import { SettingsDrawer } from './SettingsDrawer'
+import { APP_NAME } from '../theme'
 
 interface HeaderProps {
   activeTab: TabType
@@ -29,7 +30,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onToggleSidebar, auth
   const headerContent: Record<TabType, { title: string; subtitle: string }> = {
     upload: {
       title: 'Upload Order',
-      subtitle: 'Import marketplace order exports into Vianalytics',
+      subtitle: `Import marketplace order exports into ${APP_NAME}`,
     },
     traffic: {
       title: 'Upload Traffic',

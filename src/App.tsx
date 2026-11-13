@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { ConfigProvider } from 'antd'
 import './App.css'
 import { useLocalStorage } from './hooks/useLocalStorage'
 import LoginPage from './pages/LoginPage';
@@ -11,6 +12,7 @@ import { TeamView } from './components/views/TeamView'
 import { TrafficUploadView } from './components/views/TrafficUploadView'
 import { UploadView } from './components/views/UploadView'
 import { SESSION_EXPIRED_EVENT } from './utils/api-client'
+import { BRAND_PRIMARY } from './theme'
 
 function App() {
   const [authToken, setAuthToken] = useLocalStorage('access_token', {
@@ -34,6 +36,8 @@ function App() {
   const isAdmin = ((authToken?.decoded_token?.roles ?? []) as string[]).includes('admin');
 
   return (
+    // Root theme so modals and drawers outside the per-view ConfigProviders also use the brand red
+    <ConfigProvider theme={{ token: { colorPrimary: BRAND_PRIMARY } }}>
     <BrowserRouter>
       <Routes>
         <Route
@@ -63,6 +67,7 @@ function App() {
         <Route path="*" element={<Navigate to={isAuthenticated ? '/upload' : '/login'} replace />} />
       </Routes>
     </BrowserRouter>
+    </ConfigProvider>
   )
 }
 

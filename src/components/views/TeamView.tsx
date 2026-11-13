@@ -6,6 +6,7 @@ import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { useEffect, useState } from "react";
 import { ColumnSearchDropdown } from "../ColumnSearchDropdown";
 import { extractErrorMessage } from "../../utils/api";
+import { BRAND_PRIMARY } from '../../theme'
 
 interface TeamItem {
     user_id: string;
@@ -24,7 +25,7 @@ interface TeamItem {
 const searchProps = (label: string): TableColumnType<TeamItem> => ({
     filterDropdown: (props) => <ColumnSearchDropdown {...props} label={label} />,
     filterIcon: (filtered: boolean) => (
-        <SearchOutlined style={{ color: filtered ? '#4f46e5' : undefined }} />
+        <SearchOutlined style={{ color: filtered ? BRAND_PRIMARY : undefined }} />
     ),
     onFilter: () => true,
 });
@@ -284,7 +285,7 @@ export const TeamView: React.FC = () => {
         <ConfigProvider
             theme={{
                 token: {
-                    colorPrimary: '#4f46e5',
+                    colorPrimary: BRAND_PRIMARY,
                     borderRadius: 8,
                 },
           }}>

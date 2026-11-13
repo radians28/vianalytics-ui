@@ -5,6 +5,7 @@ import useStore from '../store/store';
 import { validatePasswordComplexity } from '../utils/password';
 import { extractErrorMessage } from '../utils/api';
 import type { AuthToken } from '../types/auth';
+import { Brand } from '../components/Brand'
 
 type Status = 'checking' | 'valid' | 'invalid';
 
@@ -91,17 +92,7 @@ function VerifyPage({ onVerified }: VerifyPageProps) {
     <div className="login-page">
       <div className="login-card">
         <div className="login-brand">
-          <div className="brand-logo" title="Vianalytics">
-            <svg className="icon-logo" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2.5}
-                d="M13 10V3L4 14h7v7l9-11h-7z"
-              />
-            </svg>
-          </div>
-          <span className="brand-title">Vianalytics</span>
+          <Brand variant="auth" />
         </div>
 
         {status === 'checking' && (
