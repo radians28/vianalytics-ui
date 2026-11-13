@@ -12,6 +12,7 @@ import { useLocalStorage } from '../../hooks/useLocalStorage'
 import { extractErrorMessage } from '../../utils/api'
 import { formatIdr } from '../../utils/format'
 import type { BundleChange, SkuBundleComponent, SkuBundleRow, SkuListPayload } from '../../types/sku'
+import { BRAND_PRIMARY } from '../../theme'
 
 // m_sku_bundle.dq_flag values, explained for the tag tooltips
 const DQ_FLAGS: Record<string, { label: string; color: string; help: string }> = {
@@ -187,7 +188,7 @@ export const SkuBundlingView: React.FC = () => {
   const getColumnSearchProps = (label: string): TableColumnType<SkuBundleRow> => ({
     filterDropdown: (props) => <ColumnSearchDropdown {...props} label={label} />,
     filterIcon: (filtered: boolean) => (
-      <SearchOutlined style={{ color: filtered ? '#4f46e5' : undefined }} />
+      <SearchOutlined style={{ color: filtered ? BRAND_PRIMARY : undefined }} />
     ),
   })
 
@@ -257,7 +258,7 @@ export const SkuBundlingView: React.FC = () => {
     <ConfigProvider
       theme={{
         token: {
-          colorPrimary: '#4f46e5',
+          colorPrimary: BRAND_PRIMARY,
           borderRadius: 8,
         },
       }}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { SubmitEvent } from 'react';
 import useStore from '../store/store';
+import { Brand } from '../components/Brand';
 
 interface AuthToken {
   access_token: string;
@@ -40,22 +41,7 @@ function LoginPage({ onLogin }: LoginPageProps) {
     <div className="login-page">
       <div className="login-card">
         <div className="login-brand">
-          <div className="brand-logo" title="Vianalytics">
-            <svg
-              className="icon-logo"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2.5}
-                d="M13 10V3L4 14h7v7l9-11h-7z"
-              />
-            </svg>
-          </div>
-          <span className="brand-title">Vianalytics</span>
+          <Brand variant="auth" />
         </div>
 
         <h1 className="login-title">Welcome back</h1>

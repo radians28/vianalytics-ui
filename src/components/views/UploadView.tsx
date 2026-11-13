@@ -19,6 +19,7 @@ import useStore from '../../store/store'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
 import type { FilterValue, SorterResult } from 'antd/es/table/interface'
 import { extractErrorMessage } from '../../utils/api'
+import { BRAND_PRIMARY } from '../../theme'
 
 export type MarketplaceType =
   | 'Shopee'
@@ -89,7 +90,7 @@ export const UploadView: React.FC = () => {
       <ColumnSearchDropdown {...props} label="file name" />
     ),
     filterIcon: (filtered: boolean) => (
-      <SearchOutlined style={{ color: filtered ? '#4f46e5' : undefined }} />
+      <SearchOutlined style={{ color: filtered ? BRAND_PRIMARY : undefined }} />
     ),
     onFilter: () => true,
   }
@@ -362,7 +363,7 @@ export const UploadView: React.FC = () => {
     <ConfigProvider
       theme={{
         token: {
-          colorPrimary: '#4f46e5',
+          colorPrimary: BRAND_PRIMARY,
           borderRadius: 8,
         },
       }}
